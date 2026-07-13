@@ -23,11 +23,13 @@ export function TaskCard({
   compact?: boolean;
 }) {
   const overdue = task.status === "Overdue";
+  const active = task.status === "In Progress";
   return (
     <button
       onClick={onClick}
       className={cn(
         "as-card as-press group block w-full text-left p-4 hover:border-brand/40",
+        active && "border-brand/40 shadow-glow-brand",
         overdue && "border-danger/40",
       )}
     >

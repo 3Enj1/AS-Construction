@@ -1,10 +1,5 @@
 export type Role =
-  | "admin"
-  | "project_manager"
-  | "site_supervisor"
-  | "worker"
-  | "subcontractor"
-  | "client";
+  "admin" | "project_manager" | "site_supervisor" | "worker" | "subcontractor" | "client";
 
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
@@ -16,8 +11,8 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 export interface User {
-  id: string;            // profile id
-  authUserId?: string;   // auth.users id
+  id: string; // profile id
+  authUserId?: string; // auth.users id
   employeeCode: string;
   name: string;
   role: Role;
@@ -101,12 +96,18 @@ export interface Project {
 export interface MaterialRequest {
   id: string;
   projectId: string;
+  projectName?: string;
   requestedBy: string;
+  requestedByName?: string;
+  materialId: string;
   material: string;
-  quantity: string;
+  unit: string;
+  quantity: number;
   status: "Pending" | "Approved" | "Denied" | "Delivered";
   createdAt: string;
   urgency: "Normal" | "Urgent";
+  reviewedBy?: string;
+  reviewedAt?: string;
 }
 
 export interface Material {
@@ -126,6 +127,7 @@ export interface AttendanceLog {
   clockIn: string;
   clockOut?: string;
   breakMinutes: number;
+  breakStartedAt?: string | null;
   status: "Active" | "On Break" | "Completed";
 }
 

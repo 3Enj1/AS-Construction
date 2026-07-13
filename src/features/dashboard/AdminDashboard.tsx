@@ -3,19 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/stat-card";
 import { ProjectCard } from "@/components/projects/ProjectCard";
+import { TaskTrendChart } from "@/components/dashboard/TaskTrendChart";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchEnrichedTasks } from "@/lib/project-actions";
+import { fetchEnrichedTasks, fetchTaskCompletionTrend } from "@/lib/project-actions";
 import { mapDbProject, type DbProject } from "@/lib/project-mapper";
 import { relativeFromNow } from "@/lib/format";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Hammer,
-  Plus,
-  Users,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, Hammer, Plus, Users } from "lucide-react";
 
 export function AdminDashboard() {
   const { data: projects = [] } = useQuery({
@@ -62,6 +57,11 @@ export function AdminDashboard() {
     },
   });
 
+  const { data: trend = [] } = useQuery({
+    queryKey: ["task-completion-trend"],
+    queryFn: fetchTaskCompletionTrend,
+  });
+
   const active = projects.filter((p) => p.status !== "Completed");
   const overdueTasks = tasks.filter((t) => t.status === "Overdue");
   const review = tasks.filter((t) => t.dbStatus === "submitted_for_review");
@@ -77,13 +77,19 @@ export function AdminDashboard() {
         actions={
           <>
             <Button variant="outline" asChild>
-              <Link to="/users"><Users className="size-4" /> Add user</Link>
+              <Link to="/users">
+                <Users className="size-4" /> Add user
+              </Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link to="/approvals"><CheckCircle2 className="size-4" /> Approvals</Link>
+              <Link to="/approvals">
+                <CheckCircle2 className="size-4" /> Approvals
+              </Link>
             </Button>
-            <Button className="bg-brand text-brand-foreground hover:bg-brand/90" asChild>
-              <Link to="/projects"><Plus className="size-4" /> New project</Link>
+            <Button variant="brand" asChild>
+              <Link to="/projects">
+                <Plus className="size-4" /> New project
+              </Link>
             </Button>
           </>
         }
@@ -91,31 +97,58 @@ export function AdminDashboard() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Active projects" value={active.length} icon={Hammer} tone="brand" />
-        <StatCard label="Overdue tasks" value={overdueTasks.length} icon={AlertTriangle} tone="danger" />
-        <StatCard label="Awaiting approval" value={review.length} icon={CheckCircle2} tone="warning" />
-        <StatCard label="Completed tasks" value={completed.length} icon={CheckCircle2} tone="info" />
+        <StatCard
+          label="Overdue tasks"
+          value={overdueTasks.length}
+          icon={AlertTriangle}
+          tone="danger"
+        />
+        <StatCard
+          label="Awaiting approval"
+          value={review.length}
+          icon={CheckCircle2}
+          tone="warning"
+        />
+        <StatCard
+          label="Completed tasks"
+          value={completed.length}
+          icon={CheckCircle2}
+          tone="info"
+        />
         <StatCard label="Overall progress" value={`${totalProgress}%`} icon={Hammer} tone="brand" />
         <StatCard label="Team members" value={teamCount} icon={Users} tone="neutral" />
+      </div>
+
+      <div className="mt-6">
+        <TaskTrendChart data={trend} />
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Active projects</h2>
-            <Link to="/projects" className="text-xs text-brand hover:underline">View all →</Link>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Active projects
+            </h2>
+            <Link to="/projects" className="text-xs text-brand hover:underline">
+              View all →
+            </Link>
           </div>
           {active.length === 0 ? (
             <div className="as-card p-6 text-sm text-muted-foreground">No active projects yet.</div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
-              {active.map((p) => <ProjectCard key={p.id} project={p} />)}
+              {active.map((p) => (
+                <ProjectCard key={p.id} project={p} />
+              ))}
             </div>
           )}
         </div>
 
         <div className="space-y-6">
           <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Tasks awaiting approval</h2>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Tasks awaiting approval
+            </h2>
             <div className="as-card divide-y divide-border">
               {review.map((t) => (
                 <div key={t.id} className="p-3.5">
@@ -136,21 +169,35 @@ export function AdminDashboard() {
           </section>
 
           <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Recent activity</h2>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Recent activity
+            </h2>
             <div className="as-card divide-y divide-border">
               {recent.length === 0 ? (
                 <div className="p-4 text-sm text-muted-foreground">No recent activity.</div>
               ) : (
                 recent.map((n) => (
                   <div key={n.id} className="flex gap-3 p-3.5">
-                    <div className={
-                      "mt-0.5 size-2 rounded-full " +
-                      (n.kind === "danger" ? "bg-danger" : n.kind === "warning" ? "bg-warning" : n.kind === "success" ? "bg-success" : "bg-info")
-                    } />
+                    <div
+                      className={
+                        "mt-0.5 size-2 rounded-full " +
+                        (n.kind === "danger"
+                          ? "bg-danger"
+                          : n.kind === "warning"
+                            ? "bg-warning"
+                            : n.kind === "success"
+                              ? "bg-success"
+                              : "bg-info")
+                      }
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium leading-snug">{n.title}</div>
-                      {n.body && <div className="mt-0.5 text-xs text-muted-foreground">{n.body}</div>}
-                      <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">{relativeFromNow(n.created_at)}</div>
+                      {n.body && (
+                        <div className="mt-0.5 text-xs text-muted-foreground">{n.body}</div>
+                      )}
+                      <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {relativeFromNow(n.created_at)}
+                      </div>
                     </div>
                   </div>
                 ))

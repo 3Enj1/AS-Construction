@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { ProjectStatus, TaskStatus } from "@/lib/types";
+import { AlertTriangle } from "lucide-react";
 
 type Tone = "neutral" | "info" | "success" | "warning" | "danger" | "brand";
 
@@ -40,9 +41,11 @@ function toneForTask(s: TaskStatus): Tone {
     case "Approved":
       return "success";
     case "In Progress":
+      return "brand";
     case "Submitted for Review":
-    case "Assigned":
       return "info";
+    case "Assigned":
+      return "neutral";
     case "Awaiting Materials":
     case "Blocked":
       return "warning";
@@ -51,6 +54,20 @@ function toneForTask(s: TaskStatus): Tone {
       return "danger";
     case "Archived":
       return "neutral";
+    default:
+      return "neutral";
+  }
+}
+
+function toneForGenericStatus(s: string): Tone {
+  switch (s) {
+    case "Approved":
+    case "Delivered":
+      return "success";
+    case "Denied":
+      return "danger";
+    case "Pending":
+      return "warning";
     default:
       return "neutral";
   }
@@ -68,6 +85,7 @@ export function StatusPill({
   let tone: Tone = "neutral";
   if (kind === "project") tone = toneForProject(status as ProjectStatus);
   else if (kind === "task") tone = toneForTask(status as TaskStatus);
+  else if (kind === "tone") tone = toneForGenericStatus(status);
   return (
     <span
       className={cn(
@@ -76,7 +94,11 @@ export function StatusPill({
         className,
       )}
     >
-      <span className="size-1.5 rounded-full bg-current opacity-80" />
+      {tone === "danger" ? (
+        <AlertTriangle className="size-3" />
+      ) : (
+        <span className="size-1.5 rounded-full bg-current opacity-80" />
+      )}
       {status}
     </span>
   );
@@ -99,6 +121,7 @@ export function Pill({
         className,
       )}
     >
+      {tone === "danger" && <AlertTriangle className="size-3" />}
       {children}
     </span>
   );

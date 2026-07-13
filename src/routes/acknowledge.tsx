@@ -17,11 +17,11 @@ function AckPage() {
   const { user, acknowledge } = useAuth();
   const navigate = useNavigate();
   const [agreed, setAgreed] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   if (!user) return <Navigate to="/login" />;
   if (user.acknowledged) return <Navigate to="/dashboard" />;
 
-  const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (!agreed || busy) return;
     setBusy(true);
@@ -42,7 +42,7 @@ function AckPage() {
         <div className="mb-6 flex justify-center">
           <Logo size={36} />
         </div>
-        <div className="as-card p-6 sm:p-8">
+        <div className="as-card-glass p-6 sm:p-8">
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-brand">
             <ShieldCheck className="size-4" />
             First-login acknowledgement
@@ -73,7 +73,9 @@ function AckPage() {
           <Button
             disabled={!agreed}
             onClick={submit}
-            className="mt-5 h-11 w-full bg-brand text-brand-foreground hover:bg-brand/90 as-press"
+            variant="brand"
+            shape="pill"
+            className="mt-5 h-11 w-full as-press"
           >
             <CheckCircle2 className="size-4" /> Accept & continue
           </Button>

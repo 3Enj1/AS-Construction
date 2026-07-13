@@ -44,7 +44,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
-                <Icon className="size-4" />
+                <span
+                  className={cn(
+                    "grid size-7 shrink-0 place-items-center rounded-full",
+                    active && "bg-brand/15 shadow-glow-brand",
+                  )}
+                >
+                  <Icon className="size-4" />
+                </span>
                 <span className="truncate">{item.label}</span>
                 {active && <span className="ml-auto size-1.5 rounded-full bg-brand" />}
               </Link>
@@ -92,7 +99,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <div className="hidden flex-1 lg:block">
           <div className="text-sm text-muted-foreground">
-            Welcome back, <span className="text-foreground font-medium">{user.name.split(" ")[0]}</span>
+            Welcome back,{" "}
+            <span className="text-foreground font-medium">{user.name.split(" ")[0]}</span>
           </div>
         </div>
         <Link
@@ -144,7 +152,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         : "text-sidebar-foreground/80 hover:bg-sidebar-accent",
                     )}
                   >
-                    <Icon className="size-4" />
+                    <span
+                      className={cn(
+                        "grid size-7 shrink-0 place-items-center rounded-full",
+                        active && "bg-brand/15 shadow-glow-brand",
+                      )}
+                    >
+                      <Icon className="size-4" />
+                    </span>
                     {item.label}
                   </Link>
                 );
@@ -161,9 +176,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* MAIN */}
       <main className="pb-24 lg:pb-10 lg:pl-64">
-        <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
-          {children}
-        </div>
+        <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">{children}</div>
       </main>
 
       {/* MOBILE BOTTOM NAV */}
@@ -181,7 +194,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   active ? "text-brand" : "text-muted-foreground",
                 )}
               >
-                <Icon className={cn("size-5", active && "drop-shadow")} />
+                <Icon className={cn("size-5", active && "drop-shadow-[0_0_6px_var(--brand)]")} />
                 <span className="truncate">{item.label.split(" ")[0]}</span>
               </Link>
             );

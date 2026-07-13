@@ -1,16 +1,6 @@
 // Demo data for the AS Construction MVP. Structured so it can be removed
 // before production by deleting this file and the imports in mock pages.
-import type {
-  AttendanceLog,
-  ChatMessage,
-  Material,
-  MaterialRequest,
-  Notification,
-  Project,
-  ProjectTemplate,
-  Task,
-  User,
-} from "./types";
+import type { ChatMessage, Notification, Project, ProjectTemplate, Task, User } from "./types";
 
 export const DEMO_USERS: User[] = [
   {
@@ -103,8 +93,7 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
   {
     id: "tpl-residential",
     name: "New Residential Home Build",
-    description:
-      "Full-cycle residential build template covering planning through handover.",
+    description: "Full-cycle residential build template covering planning through handover.",
     phases: [
       {
         name: "Planning & Approvals",
@@ -173,8 +162,7 @@ export const DEMO_PROJECTS: Project[] = [
     teamIds: ["u-w1", "u-w2", "u-w3", "u-sub"],
     budget: 6_450_000,
     spent: 2_780_000,
-    coverGradient:
-      "linear-gradient(135deg, oklch(0.35 0.08 27) 0%, oklch(0.22 0.02 270) 60%)",
+    coverGradient: "linear-gradient(135deg, oklch(0.35 0.08 27) 0%, oklch(0.22 0.02 270) 60%)",
     phases: [
       { id: "ph-1", name: "Planning & Approvals", order: 1, progress: 100 },
       { id: "ph-2", name: "Site Preparation", order: 2, progress: 100 },
@@ -202,8 +190,7 @@ export const DEMO_PROJECTS: Project[] = [
     teamIds: ["u-w2", "u-w3"],
     budget: 1_950_000,
     spent: 430_000,
-    coverGradient:
-      "linear-gradient(135deg, oklch(0.3 0.06 230) 0%, oklch(0.22 0.02 270) 60%)",
+    coverGradient: "linear-gradient(135deg, oklch(0.3 0.06 230) 0%, oklch(0.22 0.02 270) 60%)",
     phases: [
       { id: "ph2-1", name: "Planning & Approvals", order: 1, progress: 100 },
       { id: "ph2-2", name: "Site Preparation", order: 2, progress: 60 },
@@ -295,41 +282,78 @@ export const DEMO_TASKS: Task[] = [
   },
 ];
 
-export const DEMO_MATERIALS: Material[] = [
-  { id: "m-1", name: "Cement (50kg)", category: "Bulk", stock: 38, unit: "bags", threshold: 50, supplier: "PPC Cement" },
-  { id: "m-2", name: "Building Sand", category: "Bulk", stock: 12, unit: "m³", threshold: 8, supplier: "Afrisam" },
-  { id: "m-3", name: "Stock Bricks", category: "Bricks", stock: 4200, unit: "bricks", threshold: 5000, supplier: "Corobrik" },
-  { id: "m-4", name: "Roof Trusses (custom)", category: "Roofing", stock: 0, unit: "sets", threshold: 1, supplier: "MiTek SA" },
-  { id: "m-5", name: "Electrical Cable 2.5mm", category: "Electrical", stock: 320, unit: "m", threshold: 200, supplier: "Aberdare" },
-  { id: "m-6", name: "PVC Plumbing Pipes 110mm", category: "Plumbing", stock: 28, unit: "lengths", threshold: 15, supplier: "DPI Plastics" },
-];
-
-export const DEMO_MATERIAL_REQUESTS: MaterialRequest[] = [
-  { id: "mr-1", projectId: "p-001", requestedBy: "u-ss", material: "Roof Trusses (custom)", quantity: "1 set", status: "Pending", urgency: "Urgent", createdAt: "2026-05-14T08:12:00Z" },
-  { id: "mr-2", projectId: "p-001", requestedBy: "u-w1", material: "Stock Bricks", quantity: "2,500 bricks", status: "Approved", urgency: "Normal", createdAt: "2026-05-13T14:01:00Z" },
-  { id: "mr-3", projectId: "p-002", requestedBy: "u-ss", material: "Building Sand", quantity: "6 m³", status: "Delivered", urgency: "Normal", createdAt: "2026-05-10T09:30:00Z" },
-  { id: "mr-4", projectId: "p-001", requestedBy: "u-w2", material: "Cement (50kg)", quantity: "40 bags", status: "Pending", urgency: "Urgent", createdAt: "2026-05-15T07:42:00Z" },
-];
-
-export const DEMO_ATTENDANCE: AttendanceLog[] = [
-  { id: "a-1", userId: "u-w1", projectId: "p-001", clockIn: "2026-05-16T06:55:00Z", breakMinutes: 30, status: "Active" },
-  { id: "a-2", userId: "u-w2", projectId: "p-001", clockIn: "2026-05-16T06:58:00Z", breakMinutes: 0, status: "On Break" },
-  { id: "a-3", userId: "u-w3", projectId: "p-002", clockIn: "2026-05-16T07:02:00Z", clockOut: "2026-05-16T15:30:00Z", breakMinutes: 45, status: "Completed" },
-];
-
 export const DEMO_CHAT: ChatMessage[] = [
-  { id: "c-1", projectId: "p-001", userId: "u-ss", text: "Morning team — trusses still delayed, push brickwork up to lintel today.", at: "2026-05-16T06:30:00Z" },
-  { id: "c-2", projectId: "p-001", userId: "u-w1", text: "Copy that, north elevation will be done by lunch 👍", at: "2026-05-16T06:34:00Z" },
-  { id: "c-3", projectId: "p-001", userId: "u-pm", text: "Andrew is doing a site walk at 14h00, please make sure the work area is tidy.", at: "2026-05-16T06:45:00Z" },
-  { id: "c-4", projectId: "p-001", userId: "u-admin", text: "Thanks Lerato. I'll bring the client at 14h30.", at: "2026-05-16T06:51:00Z" },
+  {
+    id: "c-1",
+    projectId: "p-001",
+    userId: "u-ss",
+    text: "Morning team — trusses still delayed, push brickwork up to lintel today.",
+    at: "2026-05-16T06:30:00Z",
+  },
+  {
+    id: "c-2",
+    projectId: "p-001",
+    userId: "u-w1",
+    text: "Copy that, north elevation will be done by lunch 👍",
+    at: "2026-05-16T06:34:00Z",
+  },
+  {
+    id: "c-3",
+    projectId: "p-001",
+    userId: "u-pm",
+    text: "Andrew is doing a site walk at 14h00, please make sure the work area is tidy.",
+    at: "2026-05-16T06:45:00Z",
+  },
+  {
+    id: "c-4",
+    projectId: "p-001",
+    userId: "u-admin",
+    text: "Thanks Lerato. I'll bring the client at 14h30.",
+    at: "2026-05-16T06:51:00Z",
+  },
 ];
 
 export const DEMO_NOTIFICATIONS: Notification[] = [
-  { id: "n-1", forRole: "admin", title: "Material request awaiting approval", body: "Pieter requested 1 set of roof trusses for Constantia Residence.", at: "2026-05-16T07:10:00Z", kind: "warning" },
-  { id: "n-2", forRole: "admin", title: "Task overdue", body: "Foundation snag — south corner is 6 days overdue.", at: "2026-05-16T06:30:00Z", kind: "danger" },
-  { id: "n-3", forRole: "project_manager", title: "Sub submitted work for review", body: "Capetown Electrical submitted first-fix electrical for review.", at: "2026-05-15T17:02:00Z", kind: "info" },
-  { id: "n-4", forUserId: "u-w1", title: "New task assigned", body: "Build perimeter walls — north elevation.", at: "2026-05-16T06:00:00Z", kind: "info" },
-  { id: "n-5", forRole: "site_supervisor", title: "Low stock alert", body: "Stock bricks below threshold (4,200 / 5,000).", at: "2026-05-15T11:20:00Z", kind: "warning" },
+  {
+    id: "n-1",
+    forRole: "admin",
+    title: "Material request awaiting approval",
+    body: "Pieter requested 1 set of roof trusses for Constantia Residence.",
+    at: "2026-05-16T07:10:00Z",
+    kind: "warning",
+  },
+  {
+    id: "n-2",
+    forRole: "admin",
+    title: "Task overdue",
+    body: "Foundation snag — south corner is 6 days overdue.",
+    at: "2026-05-16T06:30:00Z",
+    kind: "danger",
+  },
+  {
+    id: "n-3",
+    forRole: "project_manager",
+    title: "Sub submitted work for review",
+    body: "Capetown Electrical submitted first-fix electrical for review.",
+    at: "2026-05-15T17:02:00Z",
+    kind: "info",
+  },
+  {
+    id: "n-4",
+    forUserId: "u-w1",
+    title: "New task assigned",
+    body: "Build perimeter walls — north elevation.",
+    at: "2026-05-16T06:00:00Z",
+    kind: "info",
+  },
+  {
+    id: "n-5",
+    forRole: "site_supervisor",
+    title: "Low stock alert",
+    body: "Stock bricks below threshold (4,200 / 5,000).",
+    at: "2026-05-15T11:20:00Z",
+    kind: "warning",
+  },
 ];
 
 export const ACK_TEXT =

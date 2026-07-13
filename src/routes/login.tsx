@@ -9,12 +9,12 @@ import { ArrowRight, HardHat, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 const SEEDED_ACCOUNTS = [
-  { name: "Andrew Stuart", role: "Admin",            code: "ASC-ADM-001", pwd: "Andrew2026!"  },
-  { name: "Sarah Mitchell", role: "Project Manager", code: "ASC-PM-001",  pwd: "Password123!" },
-  { name: "James Botha",   role: "Site Supervisor",  code: "ASC-SS-001",  pwd: "Password123!" },
-  { name: "Thabo Nkosi",   role: "Worker",           code: "ASC-WRK-001", pwd: "Password123!" },
-  { name: "RoofPro Subs",  role: "Subcontractor",    code: "ASC-SUB-001", pwd: "Password123!" },
-  { name: "Mr & Mrs Patel", role: "Client",          code: "ASC-CL-001",  pwd: "Password123!" },
+  { name: "Andrew Stuart", role: "Admin", code: "ASC-ADM-001", pwd: "Andrew2026!" },
+  { name: "Sarah Mitchell", role: "Project Manager", code: "ASC-PM-001", pwd: "Password123!" },
+  { name: "James Botha", role: "Site Supervisor", code: "ASC-SS-001", pwd: "Password123!" },
+  { name: "Thabo Nkosi", role: "Worker", code: "ASC-WRK-001", pwd: "Password123!" },
+  { name: "RoofPro Subs", role: "Subcontractor", code: "ASC-SUB-001", pwd: "Password123!" },
+  { name: "Mr & Mrs Patel", role: "Client", code: "ASC-CL-001", pwd: "Password123!" },
 ];
 
 export const Route = createFileRoute("/login")({
@@ -65,9 +65,8 @@ function LoginPage() {
               <span className="text-brand">Track every site.</span>
             </h1>
             <p className="mt-4 max-w-md text-sm text-muted-foreground">
-              The AS Construction Internal Management System — projects,
-              phases, tasks, attendance, materials and reports, in one place
-              for every role on every site.
+              The AS Construction Internal Management System — projects, phases, tasks, attendance,
+              materials and reports, in one place for every role on every site.
             </p>
             <div className="mt-8 grid grid-cols-3 gap-3 text-center">
               {[
@@ -94,14 +93,12 @@ function LoginPage() {
           <div className="lg:hidden mb-6 flex flex-col items-center gap-2">
             <Logo size={32} />
           </div>
-          <div className="as-card p-6 sm:p-8 shadow-card">
+          <div className="as-card-glass p-6 sm:p-8">
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-brand">
               <HardHat className="size-4" />
               Sign in
             </div>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight">
-              Employee access
-            </h2>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight">Employee access</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Use your AS Construction employee code and password.
             </p>
@@ -133,8 +130,10 @@ function LoginPage() {
               </div>
               <Button
                 type="submit"
+                variant="brand"
+                shape="pill"
                 disabled={busy}
-                className="h-11 w-full bg-brand text-brand-foreground hover:bg-brand/90 as-press"
+                className="h-11 w-full as-press"
               >
                 {busy ? (
                   <Loader2 className="size-4 animate-spin" />

@@ -27,7 +27,11 @@ function TasksPage() {
   const [filter, setFilter] = useState("All");
   const isWorkerLike = user?.role === "worker" || user?.role === "subcontractor";
 
-  const { data: tasks = [], isLoading, error } = useQuery({
+  const {
+    data: tasks = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["tasks", isWorkerLike ? `assigned:${user?.id}` : "all"],
     queryFn: () => fetchEnrichedTasks(isWorkerLike ? { assignedToProfileId: user!.id } : undefined),
     enabled: !!user,
@@ -39,15 +43,17 @@ function TasksPage() {
 
   return (
     <>
-      <PageHeader title={isWorkerLike ? "My tasks" : "Tasks"} subtitle={`${list.length} of ${tasks.length} tasks`} />
+      <PageHeader
+        title={isWorkerLike ? "My tasks" : "Tasks"}
+        subtitle={`${list.length} of ${tasks.length} tasks`}
+      />
       <div className="mb-4 flex flex-wrap gap-2 overflow-x-auto">
         {FILTERS.map((f) => (
           <Button
             key={f.label}
-            variant={filter === f.label ? "default" : "outline"}
+            variant={filter === f.label ? "brand" : "outline"}
             size="sm"
             onClick={() => setFilter(f.label)}
-            className={filter === f.label ? "bg-brand text-brand-foreground hover:bg-brand/90" : ""}
           >
             {f.label}
           </Button>
@@ -61,7 +67,9 @@ function TasksPage() {
         <div className="as-card p-6 text-sm text-muted-foreground">No tasks for this filter.</div>
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
-          {list.map((t) => <TaskCard key={t.id} task={t} />)}
+          {list.map((t) => (
+            <TaskCard key={t.id} task={t} />
+          ))}
         </div>
       )}
     </>

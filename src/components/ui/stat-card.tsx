@@ -34,12 +34,16 @@ export function StatCard({
           <div className="mt-1.5 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             {value}
           </div>
-          {hint && (
-            <div className="mt-1 text-xs text-muted-foreground">{hint}</div>
-          )}
+          {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
         </div>
         {Icon && (
-          <div className={cn("grid size-10 place-items-center rounded-lg", toneClass)}>
+          <div
+            className={cn(
+              "grid size-10 place-items-center rounded-full",
+              toneClass,
+              tone === "brand" && "shadow-glow-brand",
+            )}
+          >
             <Icon className="size-5" />
           </div>
         )}

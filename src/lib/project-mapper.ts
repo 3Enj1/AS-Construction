@@ -9,7 +9,7 @@ const STATUS_MAP: Record<string, ProjectStatus> = {
   archived: "Cancelled",
 };
 
-function gradientFromId(id: string) {
+export function gradientFromId(id: string) {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   const hue = h % 360;
@@ -33,7 +33,9 @@ export type DbProject = {
 };
 
 export function mapDbProject(p: DbProject): Project {
-  const team = [p.assigned_project_manager_id, p.assigned_site_supervisor_id].filter(Boolean) as string[];
+  const team = [p.assigned_project_manager_id, p.assigned_site_supervisor_id].filter(
+    Boolean,
+  ) as string[];
   return {
     id: p.id,
     code: codeFromId(p.id),
