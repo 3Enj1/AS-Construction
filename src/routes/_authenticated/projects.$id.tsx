@@ -37,8 +37,11 @@ import {
 } from "@/lib/task-mapper";
 import { formatDate } from "@/lib/format";
 import {
+  addProjectExpense,
+  deleteProjectExpense,
   fetchMaterials,
   fetchMaterialTransactionsForProject,
+  fetchProjectExpenses,
   logMaterialUsage,
   updateProject,
 } from "@/lib/project-actions";
@@ -53,7 +56,9 @@ import {
   Package,
   Pencil,
   Plus,
+  Trash2,
   TrendingUp,
+  Wallet,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/projects/$id")({
@@ -75,6 +80,7 @@ type ProjectRow = {
   description: string | null;
   assigned_project_manager_id: string | null;
   assigned_site_supervisor_id: string | null;
+  budget: number | null;
 };
 
 function ProjectDetail() {
@@ -302,6 +308,8 @@ function ProjectDetail() {
 
       <ProjectMaterialsSection projectId={project.id} />
 
+      {canManage && <ProjectBudgetSection projectId={project.id} budget={project.budget} />}
+
       {addTaskPhase && (
         <AddTaskDialog
           projectId={project.id}
@@ -332,9 +340,15 @@ function ProjectDetail() {
 }
 
 function ProjectMaterialsSection({ projectId }: { projectId: string }) {
-  const { data: usage = [], isLoading } = useQuery({
+  const {
+    data: usage = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ["material-transactions", projectId],
     queryFn: () => fetchMaterialTransactionsForProject(projectId),
+    retry: 1,
   });
 
   return (
@@ -344,6 +358,10 @@ function ProjectMaterialsSection({ projectId }: { projectId: string }) {
       </h2>
       {isLoading ? (
         <div className="mt-3 as-card p-6 text-sm text-muted-foreground">Loading materials…</div>
+      ) : isError ? (
+        <div className="mt-3 as-card p-6 text-sm text-danger">
+          Couldn't load materials: {error instanceof Error ? error.message : "Unknown error"}
+        </div>
       ) : usage.length === 0 ? (
         <div className="mt-3 as-card p-6 text-sm text-muted-foreground">
           No material transactions logged for this project yet.
@@ -375,6 +393,183 @@ function ProjectMaterialsSection({ projectId }: { projectId: string }) {
   );
 }
 
+function ProjectBudgetSection({
+  projectId,
+  budget,
+}: {
+  projectId: string;
+  budget: number | null;
+}) {
+  const qc = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+
+  const {
+    data: expenses = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["project-expenses", projectId],
+    queryFn: () => fetchProjectExpenses(projectId),
+    retry: 1,
+  });
+
+  const spent = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const remaining = budget != null ? budget - spent : null;
+
+  const remove = useMutation({
+    mutationFn: deleteProjectExpense,
+    onSuccess: () => {
+      toast.success("Expense removed");
+      qc.invalidateQueries({ queryKey: ["project-expenses", projectId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const money = (n: number) =>
+    n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Budget
+        </h2>
+        <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline">
+              <Plus className="size-4" /> Log expense
+            </Button>
+          </DialogTrigger>
+          <AddExpenseDialog
+            projectId={projectId}
+            onDone={() => {
+              setAddOpen(false);
+              qc.invalidateQueries({ queryKey: ["project-expenses", projectId] });
+            }}
+          />
+        </Dialog>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        <StatCard label="Budget" value={budget != null ? money(budget) : "—"} icon={Wallet} tone="brand" />
+        <StatCard label="Spent" value={money(spent)} icon={Wallet} tone="warning" />
+        <StatCard
+          label="Remaining"
+          value={remaining != null ? money(remaining) : "—"}
+          icon={Wallet}
+          tone={remaining != null && remaining < 0 ? "danger" : "success"}
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="mt-3 as-card p-6 text-sm text-muted-foreground">Loading expenses…</div>
+      ) : isError ? (
+        <div className="mt-3 as-card p-6 text-sm text-danger">
+          Couldn't load expenses: {error instanceof Error ? error.message : "Unknown error"}
+        </div>
+      ) : expenses.length === 0 ? (
+        <div className="mt-3 as-card p-6 text-sm text-muted-foreground">
+          No expenses logged for this project yet.
+        </div>
+      ) : (
+        <div className="mt-3 as-card divide-y divide-border">
+          {expenses.map((e) => (
+            <div key={e.id} className="flex items-center justify-between gap-3 p-3.5">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{e.description}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  {e.category ? `${e.category} · ` : ""}
+                  {formatDate(e.createdAt)}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-sm font-semibold tabular-nums">{money(e.amount)}</span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="text-muted-foreground hover:text-danger"
+                  disabled={remove.isPending}
+                  onClick={() => remove.mutate(e.id)}
+                  aria-label="Remove expense"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddExpenseDialog({ projectId, onDone }: { projectId: string; onDone: () => void }) {
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("");
+
+  const add = useMutation({
+    mutationFn: () =>
+      addProjectExpense({
+        projectId,
+        description: description.trim(),
+        amount: Number(amount),
+        category: category.trim() || null,
+      }),
+    onSuccess: () => {
+      toast.success("Expense logged");
+      onDone();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Log expense</DialogTitle>
+      </DialogHeader>
+      <div className="grid gap-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="exp-desc">Description</Label>
+          <Input id="exp-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="exp-amount">Amount</Label>
+            <Input
+              id="exp-amount"
+              type="number"
+              min={0.01}
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="exp-category">Category (optional)</Label>
+            <Input
+              id="exp-category"
+              placeholder="e.g. materials, labor"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button
+          disabled={!description.trim() || !Number(amount) || add.isPending}
+          onClick={() => add.mutate()}
+          variant="brand"
+        >
+          {add.isPending ? "Logging…" : "Log expense"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
 function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: () => void }) {
   const { allUsers } = useAuth();
   const clients = allUsers.filter((u) => u.role === "client");
@@ -385,6 +580,7 @@ function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: (
   const [status, setStatus] = useState(project.status as StatusValue);
   const [startDate, setStartDate] = useState(project.start_date ?? "");
   const [targetDate, setTargetDate] = useState(project.expected_completion_date ?? "");
+  const [budget, setBudget] = useState(project.budget != null ? String(project.budget) : "");
 
   const save = useMutation({
     mutationFn: () =>
@@ -396,6 +592,7 @@ function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: (
         status,
         start_date: startDate || null,
         expected_completion_date: targetDate || null,
+        budget: budget.trim() ? Number(budget) : null,
       }),
     onSuccess: () => {
       toast.success("Project updated");
@@ -489,6 +686,18 @@ function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: (
               onChange={(e) => setTargetDate(e.target.value)}
             />
           </div>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="ep-budget">Budget</Label>
+          <Input
+            id="ep-budget"
+            type="number"
+            min={0}
+            step="0.01"
+            placeholder="e.g. 250000"
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
+          />
         </div>
       </div>
       <DialogFooter>

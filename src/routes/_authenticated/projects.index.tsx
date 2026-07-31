@@ -149,6 +149,7 @@ function NewProjectDialog({
   const [status, setStatus] = useState<StatusValue>("planning");
   const [startDate, setStartDate] = useState("");
   const [targetDate, setTargetDate] = useState("");
+  const [budget, setBudget] = useState("");
   const [templateId, setTemplateId] = useState<string>(initialTemplateId ?? "none");
 
   useEffect(() => {
@@ -171,6 +172,7 @@ function NewProjectDialog({
         status,
         start_date: startDate || null,
         expected_completion_date: targetDate || null,
+        budget: budget.trim() ? Number(budget) : null,
         template_id: templateId === "none" ? null : templateId,
       });
     },
@@ -272,6 +274,18 @@ function NewProjectDialog({
               onChange={(e) => setTargetDate(e.target.value)}
             />
           </div>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="np-budget">Budget (optional)</Label>
+          <Input
+            id="np-budget"
+            type="number"
+            min={0}
+            step="0.01"
+            placeholder="e.g. 250000"
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
+          />
         </div>
         <div className="grid gap-1.5">
           <Label>Template (optional)</Label>

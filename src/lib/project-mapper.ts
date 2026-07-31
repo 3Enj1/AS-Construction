@@ -31,6 +31,7 @@ export type DbProject = {
   expected_completion_date: string | null;
   assigned_project_manager_id: string | null;
   assigned_site_supervisor_id: string | null;
+  budget?: number | null;
 };
 
 export function mapDbProject(p: DbProject): Project {
@@ -51,7 +52,7 @@ export function mapDbProject(p: DbProject): Project {
     managerId: p.assigned_project_manager_id ?? "",
     supervisorId: p.assigned_site_supervisor_id ?? "",
     teamIds: team,
-    budget: 0,
+    budget: p.budget ?? 0,
     spent: 0,
     phases: [],
     coverGradient: gradientFromId(p.id),

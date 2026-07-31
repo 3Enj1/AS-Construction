@@ -74,6 +74,8 @@ export type EnrichedTask = {
   supervisor: Mini;
   isArchived: boolean;
   submittedAt: string | null;
+  approvedAt: string | null;
+  completedAt: string | null;
   rejectionReason: string | null;
   clientVisible: boolean;
 };
@@ -117,6 +119,8 @@ export function enrichTask(
       : null,
     isArchived: t.is_archived,
     submittedAt: t.submitted_for_review_at,
+    approvedAt: t.approved_at,
+    completedAt: t.completed_at,
     rejectionReason: t.rejection_reason,
     clientVisible: t.client_visible ?? false,
   };

@@ -195,6 +195,51 @@ export type Database = {
         }
         Relationships: []
       }
+      project_expenses: {
+        Row: {
+          amount: number
+          category: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          project_id: string
+        }
+        Insert: {
+          amount: number
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          description: string
+          id?: string
+          project_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_expenses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_expenses_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           architect_notes: string | null
@@ -203,6 +248,7 @@ export type Database = {
           archived_by: string | null
           assigned_project_manager_id: string | null
           assigned_site_supervisor_id: string | null
+          budget: number | null
           client_contact: string | null
           client_name: string | null
           client_profile_id: string | null
@@ -231,6 +277,7 @@ export type Database = {
           archived_by?: string | null
           assigned_project_manager_id?: string | null
           assigned_site_supervisor_id?: string | null
+          budget?: number | null
           client_contact?: string | null
           client_name?: string | null
           client_profile_id?: string | null
@@ -259,6 +306,7 @@ export type Database = {
           archived_by?: string | null
           assigned_project_manager_id?: string | null
           assigned_site_supervisor_id?: string | null
+          budget?: number | null
           client_contact?: string | null
           client_name?: string | null
           client_profile_id?: string | null

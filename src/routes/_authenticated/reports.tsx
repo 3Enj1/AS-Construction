@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import {
   fetchAttendanceLogs,
+  fetchBudgetSummary,
   fetchMaterialRequests,
   fetchProjectsMini,
 } from "@/lib/project-actions";
@@ -121,7 +122,26 @@ function useReports() {
     );
   };
 
-  return { exportProjectStatus, exportAttendanceWeekly, exportMaterialUsage };
+  const exportBudgetVsActuals = async () => {
+    const summary = await fetchBudgetSummary();
+    const rows = summary.map((p) => {
+      const remaining = p.budget != null ? p.budget - p.spent : "";
+      const pctUsed = p.budget ? Math.round((p.spent / p.budget) * 100) : "";
+      return [
+        p.projectName,
+        p.budget ?? "",
+        p.spent.toFixed(2),
+        remaining === "" ? "" : Number(remaining).toFixed(2),
+        pctUsed === "" ? "" : `${pctUsed}%`,
+      ];
+    });
+    downloadCsv(
+      "budget-vs-actuals.csv",
+      toCsv(["Project", "Budget", "Spent", "Remaining", "% used"], rows),
+    );
+  };
+
+  return { exportProjectStatus, exportAttendanceWeekly, exportMaterialUsage, exportBudgetVsActuals };
 }
 
 function ReportsPage() {
@@ -129,6 +149,7 @@ function ReportsPage() {
     exportProjectStatus: exportProjects,
     exportAttendanceWeekly,
     exportMaterialUsage,
+    exportBudgetVsActuals,
   } = useReports();
   const [exporting, setExporting] = useState<string | null>(null);
 
@@ -151,7 +172,12 @@ function ReportsPage() {
       tag: "Monthly",
       run: exportMaterialUsage,
     },
-    { name: "Budget vs actuals", desc: "Spend tracking by project & phase.", tag: "Coming soon" },
+    {
+      name: "Budget vs actuals",
+      desc: "Spend tracking by project.",
+      tag: "Live",
+      run: exportBudgetVsActuals,
+    },
     {
       name: "Subcontractor performance",
       desc: "On-time delivery, rework rate, quality score.",

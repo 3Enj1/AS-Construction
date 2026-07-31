@@ -1,7 +1,15 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { DbTask } from "./task-mapper";
 import { enrichTask, type EnrichedTask } from "./task-mapper";
-import type { Material, MaterialRequest, AttendanceLog, ChatMessage, Role, Project } from "./types";
+import type {
+  Material,
+  MaterialRequest,
+  AttendanceLog,
+  ChatMessage,
+  Role,
+  Project,
+  Notification,
+} from "./types";
 
 export type ProjectMini = { id: string; project_name: string };
 export type PhaseMini = { id: string; phase_name: string; project_id: string };
@@ -72,6 +80,7 @@ export async function createProjectFromTemplate(input: {
   status: "planning" | "active" | "on_hold" | "completed" | "cancelled";
   start_date?: string | null;
   expected_completion_date?: string | null;
+  budget?: number | null;
   template_id?: string | null;
 }) {
   const { data: u } = await supabase.auth.getUser();
@@ -92,6 +101,7 @@ export async function createProjectFromTemplate(input: {
       status: input.status,
       start_date: input.start_date ?? null,
       expected_completion_date: input.expected_completion_date ?? null,
+      budget: input.budget ?? null,
       created_by: me?.id ?? null,
     })
     .select("id")
@@ -169,6 +179,7 @@ export async function updateProject(
     status: "planning" | "active" | "on_hold" | "completed" | "cancelled";
     start_date?: string | null;
     expected_completion_date?: string | null;
+    budget?: number | null;
   },
 ) {
   const { error } = await supabase
@@ -181,6 +192,7 @@ export async function updateProject(
       status: input.status,
       start_date: input.start_date ?? null,
       expected_completion_date: input.expected_completion_date ?? null,
+      budget: input.budget ?? null,
     })
     .eq("id", id);
   if (error) throw error;
@@ -625,6 +637,24 @@ export async function fetchAttendanceLogs(): Promise<AttendanceLog[]> {
   return ((data as DbAttendance[]) ?? []).map(mapAttendance);
 }
 
+/** Total hours worked (clocked minus breaks) over the last 7 days, for a worker's own performance stats. */
+export async function fetchMyRecentHours(profileId: string): Promise<number> {
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data, error } = await supabase
+    .from("attendance_logs")
+    .select("clock_in,clock_out,break_minutes")
+    .eq("profile_id", profileId)
+    .gte("clock_in", since);
+  if (error) throw error;
+  const totalMs = (data ?? []).reduce((sum, log) => {
+    const start = new Date(log.clock_in).getTime();
+    const end = log.clock_out ? new Date(log.clock_out).getTime() : Date.now();
+    const breakMs = (log.break_minutes ?? 0) * 60_000;
+    return sum + Math.max(0, end - start - breakMs);
+  }, 0);
+  return Math.round((totalMs / 3_600_000) * 10) / 10;
+}
+
 /** Profile ids currently clocked in (open attendance row), for a real "on-site now" indicator. */
 export async function fetchOnSiteProfileIds(): Promise<Set<string>> {
   const { data, error } = await supabase
@@ -924,4 +954,235 @@ export async function archiveTemplate(id: string): Promise<void> {
     .update({ is_active: false })
     .eq("id", id);
   if (error) throw error;
+}
+
+export type DbNotification = {
+  id: string;
+  for_user_id: string | null;
+  for_role: Role | null;
+  title: string;
+  body: string | null;
+  kind: "info" | "warning" | "success" | "danger";
+  link_url: string | null;
+  is_read: boolean;
+  created_at: string;
+};
+
+/** Notifications visible to the current user, per RLS (own + role broadcasts). */
+export async function fetchNotifications(): Promise<Notification[]> {
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id,for_user_id,for_role,title,body,kind,link_url,is_read,created_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return ((data ?? []) as DbNotification[]).map((n) => ({
+    id: n.id,
+    forRole: n.for_role ?? undefined,
+    forUserId: n.for_user_id ?? undefined,
+    title: n.title,
+    body: n.body ?? "",
+    at: n.created_at,
+    kind: n.kind,
+    read: n.is_read,
+  }));
+}
+
+/** Unread count for the bell badge — only personal notifications are
+ * individually read-tracked; role broadcasts have no per-user read state. */
+export async function fetchUnreadNotificationCount(profileId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("for_user_id", profileId)
+    .eq("is_read", false);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export type UploadPhoto = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  taskId: string | null;
+  fileUrl: string;
+  fileType: string | null;
+  category: string;
+  note: string | null;
+  createdAt: string;
+};
+
+/** Photos uploaded across projects visible to the current user (RLS-scoped). */
+export async function fetchMyUploads(): Promise<UploadPhoto[]> {
+  const { data, error } = await supabase
+    .from("task_photos")
+    .select("id,project_id,task_id,file_url,file_type,upload_category,note,created_at")
+    .order("created_at", { ascending: false })
+    .limit(40);
+  if (error) throw error;
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+
+  const projectIds = Array.from(new Set(rows.map((r) => r.project_id)));
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id,project_name")
+    .in("id", projectIds);
+  const projectMap = new Map((projects ?? []).map((p) => [p.id, p.project_name]));
+
+  return rows.map((r) => ({
+    id: r.id,
+    projectId: r.project_id,
+    projectName: projectMap.get(r.project_id) ?? "—",
+    taskId: r.task_id,
+    fileUrl: r.file_url,
+    fileType: r.file_type,
+    category: r.upload_category ?? "progress",
+    note: r.note,
+    createdAt: r.created_at,
+  }));
+}
+
+/** Signed, time-limited URLs for private-bucket storage paths, keyed by path. */
+export async function getSignedPhotoUrls(paths: string[]): Promise<Map<string, string>> {
+  if (paths.length === 0) return new Map();
+  const { data, error } = await supabase.storage
+    .from("task-photos")
+    .createSignedUrls(paths, 3600);
+  if (error) throw error;
+  const map = new Map<string, string>();
+  for (const item of data ?? []) {
+    if (item.signedUrl && item.path) map.set(item.path, item.signedUrl);
+  }
+  return map;
+}
+
+/** Upload a site photo to Storage and record it against a project (and optionally a task). */
+export async function uploadTaskPhoto(input: {
+  projectId: string;
+  taskId?: string | null;
+  file: File;
+  category: string;
+  note?: string | null;
+}): Promise<void> {
+  const meId = await currentProfileId();
+  if (!meId) throw new Error("Not signed in");
+
+  const ext = input.file.name.includes(".") ? input.file.name.split(".").pop() : "jpg";
+  const path = `${input.projectId}/${crypto.randomUUID()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("task-photos")
+    .upload(path, input.file, { contentType: input.file.type || undefined });
+  if (uploadError) throw uploadError;
+
+  const { error: insertError } = await supabase.from("task_photos").insert({
+    project_id: input.projectId,
+    task_id: input.taskId || null,
+    uploaded_by: meId,
+    file_url: path,
+    file_type: input.file.type || null,
+    upload_category: input.category,
+    note: input.note || null,
+  });
+  if (insertError) {
+    await supabase.storage.from("task-photos").remove([path]);
+    throw insertError;
+  }
+}
+
+export type ProjectExpense = {
+  id: string;
+  projectId: string;
+  description: string;
+  amount: number;
+  category: string | null;
+  createdAt: string;
+};
+
+export async function fetchProjectExpenses(projectId: string): Promise<ProjectExpense[]> {
+  const { data, error } = await supabase
+    .from("project_expenses")
+    .select("id,project_id,description,amount,category,created_at")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((e) => ({
+    id: e.id,
+    projectId: e.project_id,
+    description: e.description,
+    amount: Number(e.amount),
+    category: e.category,
+    createdAt: e.created_at,
+  }));
+}
+
+export async function addProjectExpense(input: {
+  projectId: string;
+  description: string;
+  amount: number;
+  category?: string | null;
+}): Promise<void> {
+  const meId = await currentProfileId();
+  const { error } = await supabase.from("project_expenses").insert({
+    project_id: input.projectId,
+    description: input.description,
+    amount: input.amount,
+    category: input.category || null,
+    created_by: meId,
+  });
+  if (error) throw error;
+}
+
+export async function deleteProjectExpense(id: string): Promise<void> {
+  const { error } = await supabase.from("project_expenses").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export type ProjectBudgetSummary = {
+  projectId: string;
+  projectName: string;
+  budget: number | null;
+  spent: number;
+};
+
+/** Budget vs. actuals across every non-archived project, for the Reports export. */
+export async function fetchBudgetSummary(): Promise<ProjectBudgetSummary[]> {
+  const { data: projects, error: pErr } = await supabase
+    .from("projects")
+    .select("id,project_name,budget")
+    .eq("is_archived", false)
+    .order("project_name", { ascending: true });
+  if (pErr) throw pErr;
+  const rows = projects ?? [];
+  if (rows.length === 0) return [];
+
+  const { data: expenses, error: eErr } = await supabase
+    .from("project_expenses")
+    .select("project_id,amount")
+    .in(
+      "project_id",
+      rows.map((p) => p.id),
+    );
+  if (eErr) throw eErr;
+
+  const spentByProject = new Map<string, number>();
+  for (const e of expenses ?? []) {
+    spentByProject.set(e.project_id, (spentByProject.get(e.project_id) ?? 0) + Number(e.amount));
+  }
+
+  return rows.map((p) => ({
+    projectId: p.id,
+    projectName: p.project_name,
+    budget: p.budget,
+    spent: spentByProject.get(p.id) ?? 0,
+  }));
 }

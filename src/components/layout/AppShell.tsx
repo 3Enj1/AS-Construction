@@ -1,9 +1,11 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { Logo } from "@/components/brand/Logo";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useAuth } from "@/lib/auth-context";
 import { ROLE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { fetchUnreadNotificationCount } from "@/lib/project-actions";
 import { getNavForRole, getMobileNavForRole } from "./nav-items";
 import { Bell, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
@@ -14,6 +16,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ["notifications-unread-count", user?.id],
+    queryFn: () => fetchUnreadNotificationCount(user!.id),
+    enabled: !!user,
+    refetchInterval: 60_000,
+  });
 
   if (!user) return null;
 
@@ -111,9 +120,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           aria-label="Notifications"
         >
           <Bell className="size-4" />
-          <span className="absolute -right-0.5 -top-0.5 grid size-4 place-items-center rounded-full bg-brand text-[9px] font-bold text-brand-foreground">
-            3
-          </span>
+          {unreadCount > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 grid min-w-4 h-4 place-items-center rounded-full bg-brand px-1 text-[9px] font-bold text-brand-foreground">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
         </Link>
         <Link to="/profile" className="lg:hidden">
           <UserAvatar user={user} size={32} />
