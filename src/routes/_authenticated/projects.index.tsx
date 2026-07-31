@@ -24,7 +24,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import { mapDbProject, type DbProject } from "@/lib/project-mapper";
-import { createProjectFromTemplate, fetchTemplates } from "@/lib/project-actions";
+import { attachProjectProgress, createProjectFromTemplate, fetchTemplates } from "@/lib/project-actions";
 import { templateVisual } from "@/lib/template-visuals";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -33,7 +33,7 @@ import { useEffect, useState } from "react";
 
 type ProjectsSearch = { template?: string };
 
-export const Route = createFileRoute("/_authenticated/projects")({
+export const Route = createFileRoute("/_authenticated/projects/")({
   component: ProjectsList,
   validateSearch: (search: Record<string, unknown>): ProjectsSearch => ({
     template: typeof search.template === "string" ? search.template : undefined,
@@ -65,12 +65,12 @@ function ProjectsList() {
       const { data, error } = await supabase
         .from("projects")
         .select(
-          "id,project_name,client_name,site_address,status,start_date,expected_completion_date,assigned_project_manager_id,assigned_site_supervisor_id",
+          "id,project_name,client_name,client_profile_id,site_address,status,start_date,expected_completion_date,assigned_project_manager_id,assigned_site_supervisor_id",
         )
         .eq("is_archived", false)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return ((data as DbProject[]) ?? []).map(mapDbProject);
+      return attachProjectProgress(((data as DbProject[]) ?? []).map(mapDbProject));
     },
   });
 
@@ -139,8 +139,11 @@ function NewProjectDialog({
   initialTemplateId?: string;
 }) {
   const navigate = useNavigate();
+  const { allUsers } = useAuth();
+  const clients = allUsers.filter((u) => u.role === "client");
   const [name, setName] = useState("");
   const [client, setClient] = useState("");
+  const [clientProfileId, setClientProfileId] = useState<string>("none");
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<StatusValue>("planning");
@@ -162,6 +165,7 @@ function NewProjectDialog({
       return createProjectFromTemplate({
         project_name: name.trim(),
         client_name: client.trim() || null,
+        client_profile_id: clientProfileId === "none" ? null : clientProfileId,
         site_address: address.trim() || null,
         description: description.trim() || null,
         status,
@@ -199,7 +203,7 @@ function NewProjectDialog({
         </div>
         <div className="grid gap-1.5 sm:grid-cols-2 sm:gap-3">
           <div className="grid gap-1.5">
-            <Label htmlFor="np-client">Client</Label>
+            <Label htmlFor="np-client">Client name</Label>
             <Input id="np-client" value={client} onChange={(e) => setClient(e.target.value)} />
           </div>
           <div className="grid gap-1.5">
@@ -217,6 +221,33 @@ function NewProjectDialog({
               </SelectContent>
             </Select>
           </div>
+        </div>
+        <div className="grid gap-1.5">
+          <Label>Client account</Label>
+          <Select
+            value={clientProfileId}
+            onValueChange={(v) => {
+              setClientProfileId(v);
+              const picked = clients.find((c) => c.id === v);
+              if (picked) setClient(picked.name);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No client account linked</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Link an existing client login so they can see this project and its client-visible
+            tasks. Leave unlinked if there's no client account yet — you can add it later.
+          </p>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="np-addr">Site address</Label>

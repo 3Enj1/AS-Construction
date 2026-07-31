@@ -52,6 +52,7 @@ export type DbTask = {
   approved_at: string | null;
   completed_at: string | null;
   rejection_reason: string | null;
+  client_visible?: boolean;
 };
 
 export type EnrichedTask = {
@@ -74,6 +75,7 @@ export type EnrichedTask = {
   isArchived: boolean;
   submittedAt: string | null;
   rejectionReason: string | null;
+  clientVisible: boolean;
 };
 
 export function codeFromProjectId(id: string) {
@@ -116,5 +118,6 @@ export function enrichTask(
     isArchived: t.is_archived,
     submittedAt: t.submitted_for_review_at,
     rejectionReason: t.rejection_reason,
+    clientVisible: t.client_visible ?? false,
   };
 }

@@ -24,6 +24,7 @@ export type DbProject = {
   id: string;
   project_name: string;
   client_name: string | null;
+  client_profile_id?: string | null;
   site_address: string | null;
   status: string;
   start_date: string | null;
@@ -41,6 +42,7 @@ export function mapDbProject(p: DbProject): Project {
     code: codeFromId(p.id),
     name: p.project_name,
     client: p.client_name ?? "—",
+    clientProfileId: p.client_profile_id ?? null,
     address: p.site_address ?? "—",
     status: STATUS_MAP[p.status] ?? "Planning",
     progress: 0,

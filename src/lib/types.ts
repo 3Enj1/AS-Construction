@@ -79,6 +79,7 @@ export interface Project {
   code: string;
   name: string;
   client: string;
+  clientProfileId: string | null;
   address: string;
   status: ProjectStatus;
   progress: number;

@@ -19,7 +19,6 @@ import { Route as AuthenticatedTemplatesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
-import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedPerformanceRouteImport } from './routes/_authenticated/performance'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
@@ -28,9 +27,8 @@ import { Route as AuthenticatedMaterialRequestsRouteImport } from './routes/_aut
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedClockRouteImport } from './routes/_authenticated/clock'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
-import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
-import { Route as AuthenticatedArchiveRouteImport } from './routes/_authenticated/archive'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
+import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
 
 const LoginRoute = LoginRouteImport.update({
@@ -82,11 +80,6 @@ const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
-  id: '/projects',
-  path: '/projects',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -130,25 +123,21 @@ const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedAttendanceRoute = AuthenticatedAttendanceRouteImport.update({
-  id: '/attendance',
-  path: '/attendance',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedArchiveRoute = AuthenticatedArchiveRouteImport.update({
-  id: '/archive',
-  path: '/archive',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedApprovalsRoute = AuthenticatedApprovalsRouteImport.update({
   id: '/approvals',
   path: '/approvals',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedProjectsIndexRoute =
+  AuthenticatedProjectsIndexRouteImport.update({
+    id: '/projects/',
+    path: '/projects/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedProjectsIdRoute = AuthenticatedProjectsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AuthenticatedProjectsRoute,
+  id: '/projects/$id',
+  path: '/projects/$id',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -156,8 +145,6 @@ export interface FileRoutesByFullPath {
   '/acknowledge': typeof AcknowledgeRoute
   '/login': typeof LoginRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
-  '/archive': typeof AuthenticatedArchiveRoute
-  '/attendance': typeof AuthenticatedAttendanceRoute
   '/chat': typeof AuthenticatedChatRoute
   '/clock': typeof AuthenticatedClockRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -166,7 +153,6 @@ export interface FileRoutesByFullPath {
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/performance': typeof AuthenticatedPerformanceRoute
   '/profile': typeof AuthenticatedProfileRoute
-  '/projects': typeof AuthenticatedProjectsRouteWithChildren
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
@@ -174,14 +160,13 @@ export interface FileRoutesByFullPath {
   '/uploads': typeof AuthenticatedUploadsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/projects/': typeof AuthenticatedProjectsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/acknowledge': typeof AcknowledgeRoute
   '/login': typeof LoginRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
-  '/archive': typeof AuthenticatedArchiveRoute
-  '/attendance': typeof AuthenticatedAttendanceRoute
   '/chat': typeof AuthenticatedChatRoute
   '/clock': typeof AuthenticatedClockRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -190,7 +175,6 @@ export interface FileRoutesByTo {
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/performance': typeof AuthenticatedPerformanceRoute
   '/profile': typeof AuthenticatedProfileRoute
-  '/projects': typeof AuthenticatedProjectsRouteWithChildren
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
@@ -198,6 +182,7 @@ export interface FileRoutesByTo {
   '/uploads': typeof AuthenticatedUploadsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/projects': typeof AuthenticatedProjectsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -206,8 +191,6 @@ export interface FileRoutesById {
   '/acknowledge': typeof AcknowledgeRoute
   '/login': typeof LoginRoute
   '/_authenticated/approvals': typeof AuthenticatedApprovalsRoute
-  '/_authenticated/archive': typeof AuthenticatedArchiveRoute
-  '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
   '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/_authenticated/clock': typeof AuthenticatedClockRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -216,7 +199,6 @@ export interface FileRoutesById {
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/performance': typeof AuthenticatedPerformanceRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
-  '/_authenticated/projects': typeof AuthenticatedProjectsRouteWithChildren
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
@@ -224,6 +206,7 @@ export interface FileRoutesById {
   '/_authenticated/uploads': typeof AuthenticatedUploadsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -232,8 +215,6 @@ export interface FileRouteTypes {
     | '/acknowledge'
     | '/login'
     | '/approvals'
-    | '/archive'
-    | '/attendance'
     | '/chat'
     | '/clock'
     | '/dashboard'
@@ -242,7 +223,6 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/performance'
     | '/profile'
-    | '/projects'
     | '/reports'
     | '/settings'
     | '/tasks'
@@ -250,14 +230,13 @@ export interface FileRouteTypes {
     | '/uploads'
     | '/users'
     | '/projects/$id'
+    | '/projects/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/acknowledge'
     | '/login'
     | '/approvals'
-    | '/archive'
-    | '/attendance'
     | '/chat'
     | '/clock'
     | '/dashboard'
@@ -266,7 +245,6 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/performance'
     | '/profile'
-    | '/projects'
     | '/reports'
     | '/settings'
     | '/tasks'
@@ -274,6 +252,7 @@ export interface FileRouteTypes {
     | '/uploads'
     | '/users'
     | '/projects/$id'
+    | '/projects'
   id:
     | '__root__'
     | '/'
@@ -281,8 +260,6 @@ export interface FileRouteTypes {
     | '/acknowledge'
     | '/login'
     | '/_authenticated/approvals'
-    | '/_authenticated/archive'
-    | '/_authenticated/attendance'
     | '/_authenticated/chat'
     | '/_authenticated/clock'
     | '/_authenticated/dashboard'
@@ -291,7 +268,6 @@ export interface FileRouteTypes {
     | '/_authenticated/notifications'
     | '/_authenticated/performance'
     | '/_authenticated/profile'
-    | '/_authenticated/projects'
     | '/_authenticated/reports'
     | '/_authenticated/settings'
     | '/_authenticated/tasks'
@@ -299,6 +275,7 @@ export interface FileRouteTypes {
     | '/_authenticated/uploads'
     | '/_authenticated/users'
     | '/_authenticated/projects/$id'
+    | '/_authenticated/projects/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -380,13 +357,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReportsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/projects': {
-      id: '/_authenticated/projects'
-      path: '/projects'
-      fullPath: '/projects'
-      preLoaderRoute: typeof AuthenticatedProjectsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/profile': {
       id: '/_authenticated/profile'
       path: '/profile'
@@ -443,20 +413,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChatRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/attendance': {
-      id: '/_authenticated/attendance'
-      path: '/attendance'
-      fullPath: '/attendance'
-      preLoaderRoute: typeof AuthenticatedAttendanceRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/archive': {
-      id: '/_authenticated/archive'
-      path: '/archive'
-      fullPath: '/archive'
-      preLoaderRoute: typeof AuthenticatedArchiveRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/approvals': {
       id: '/_authenticated/approvals'
       path: '/approvals'
@@ -464,33 +420,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedApprovalsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/projects/': {
+      id: '/_authenticated/projects/'
+      path: '/projects'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof AuthenticatedProjectsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/projects/$id': {
       id: '/_authenticated/projects/$id'
-      path: '/$id'
+      path: '/projects/$id'
       fullPath: '/projects/$id'
       preLoaderRoute: typeof AuthenticatedProjectsIdRouteImport
-      parentRoute: typeof AuthenticatedProjectsRoute
+      parentRoute: typeof AuthenticatedRoute
     }
   }
 }
 
-interface AuthenticatedProjectsRouteChildren {
-  AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
-}
-
-const AuthenticatedProjectsRouteChildren: AuthenticatedProjectsRouteChildren = {
-  AuthenticatedProjectsIdRoute: AuthenticatedProjectsIdRoute,
-}
-
-const AuthenticatedProjectsRouteWithChildren =
-  AuthenticatedProjectsRoute._addFileChildren(
-    AuthenticatedProjectsRouteChildren,
-  )
-
 interface AuthenticatedRouteChildren {
   AuthenticatedApprovalsRoute: typeof AuthenticatedApprovalsRoute
-  AuthenticatedArchiveRoute: typeof AuthenticatedArchiveRoute
-  AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedClockRoute: typeof AuthenticatedClockRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
@@ -499,19 +447,18 @@ interface AuthenticatedRouteChildren {
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedPerformanceRoute: typeof AuthenticatedPerformanceRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
-  AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRouteWithChildren
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
   AuthenticatedTemplatesRoute: typeof AuthenticatedTemplatesRoute
   AuthenticatedUploadsRoute: typeof AuthenticatedUploadsRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
+  AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
+  AuthenticatedProjectsIndexRoute: typeof AuthenticatedProjectsIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedApprovalsRoute: AuthenticatedApprovalsRoute,
-  AuthenticatedArchiveRoute: AuthenticatedArchiveRoute,
-  AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedClockRoute: AuthenticatedClockRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
@@ -520,13 +467,14 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedPerformanceRoute: AuthenticatedPerformanceRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
-  AuthenticatedProjectsRoute: AuthenticatedProjectsRouteWithChildren,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTasksRoute: AuthenticatedTasksRoute,
   AuthenticatedTemplatesRoute: AuthenticatedTemplatesRoute,
   AuthenticatedUploadsRoute: AuthenticatedUploadsRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
+  AuthenticatedProjectsIdRoute: AuthenticatedProjectsIdRoute,
+  AuthenticatedProjectsIndexRoute: AuthenticatedProjectsIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

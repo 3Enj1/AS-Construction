@@ -247,4 +247,35 @@
   @keyframes ping {
     75%, 100% { transform: scale(2); opacity: 0; }
   }
+
+  /* Site-loader: swinging hammer striking a block, used on initial app load. */
+  .site-loader-hammer {
+    transform-origin: 85% 85%;
+    animation: hammer-swing 0.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+  @keyframes hammer-swing {
+    0%, 100% { transform: rotate(-38deg); }
+    45% { transform: rotate(-38deg); }
+    58% { transform: rotate(14deg); }
+    72% { transform: rotate(6deg); }
+    100% { transform: rotate(-38deg); }
+  }
+  .site-loader-block {
+    animation: block-impact 0.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+  @keyframes block-impact {
+    0%, 55% { transform: translateY(0) scaleX(1); }
+    60% { transform: translateY(1.5px) scaleX(1.06); }
+    68% { transform: translateY(0) scaleX(1); }
+    100% { transform: translateY(0) scaleX(1); }
+  }
+  .site-loader-spark {
+    opacity: 0;
+    animation: spark-burst 0.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+  @keyframes spark-burst {
+    0%, 57% { opacity: 0; transform: scale(0.4); }
+    62% { opacity: 1; transform: scale(1.15); }
+    75%, 100% { opacity: 0; transform: scale(1.6); }
+  }
 }

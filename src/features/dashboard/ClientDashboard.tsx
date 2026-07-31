@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { supabase } from "@/integrations/supabase/client";
-import { currentProfileId } from "@/lib/project-actions";
+import { attachProjectProgress, currentProfileId } from "@/lib/project-actions";
 import { mapDbProject, type DbProject } from "@/lib/project-mapper";
 
 export function ClientDashboard() {
@@ -20,7 +20,7 @@ export function ClientDashboard() {
         .eq("is_archived", false)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return ((data as DbProject[]) ?? []).map(mapDbProject);
+      return attachProjectProgress(((data as DbProject[]) ?? []).map(mapDbProject));
     },
   });
 

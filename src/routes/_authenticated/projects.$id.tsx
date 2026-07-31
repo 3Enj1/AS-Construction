@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { StatCard } from "@/components/ui/stat-card";
 import { TaskCard } from "@/components/tasks/TaskCard";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,6 +40,7 @@ import {
   fetchMaterials,
   fetchMaterialTransactionsForProject,
   logMaterialUsage,
+  updateProject,
 } from "@/lib/project-actions";
 import { toast } from "sonner";
 import {
@@ -49,6 +51,7 @@ import {
   Layers,
   MapPin,
   Package,
+  Pencil,
   Plus,
   TrendingUp,
 } from "lucide-react";
@@ -58,11 +61,13 @@ export const Route = createFileRoute("/_authenticated/projects/$id")({
   notFoundComponent: () => <div className="text-muted-foreground">Project not found.</div>,
 });
 
+type StatusValue = "planning" | "active" | "on_hold" | "completed" | "cancelled";
 type Phase = { id: string; phase_name: string; sort_order: number; status: string };
 type ProjectRow = {
   id: string;
   project_name: string;
   client_name: string | null;
+  client_profile_id: string | null;
   site_address: string | null;
   status: string;
   start_date: string | null;
@@ -92,7 +97,7 @@ function ProjectDetail() {
         supabase
           .from("tasks")
           .select(
-            "id,task_title,description,status,priority,due_date,project_id,phase_id,assigned_user_id,assigned_supervisor_id,is_archived,submitted_for_review_at,approved_at,completed_at,rejection_reason",
+            "id,task_title,description,status,priority,due_date,project_id,phase_id,assigned_user_id,assigned_supervisor_id,is_archived,submitted_for_review_at,approved_at,completed_at,rejection_reason,client_visible",
           )
           .eq("project_id", id)
           .eq("is_archived", false)
@@ -133,6 +138,7 @@ function ProjectDetail() {
   });
 
   const [addPhaseOpen, setAddPhaseOpen] = useState(false);
+  const [editProjectOpen, setEditProjectOpen] = useState(false);
   const [editTask, setEditTask] = useState<EnrichedTask | null>(null);
   const [addTaskPhase, setAddTaskPhase] = useState<Phase | null>(null);
 
@@ -178,9 +184,34 @@ function ProjectDetail() {
                   {formatDate(project.expected_completion_date)}
                 </span>
               )}
+              {canManage && (
+                <span className="inline-flex items-center gap-1">
+                  {project.client_profile_id
+                    ? "Client account linked"
+                    : "No client account linked"}
+                </span>
+              )}
             </div>
           </div>
-          <StatusPill status={project.status} kind="tone" />
+          <div className="flex items-center gap-2">
+            <StatusPill status={project.status} kind="tone" />
+            {canManage && (
+              <Dialog open={editProjectOpen} onOpenChange={setEditProjectOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    <Pencil className="size-3.5" /> Edit
+                  </Button>
+                </DialogTrigger>
+                <EditProjectDialog
+                  project={project}
+                  onDone={() => {
+                    setEditProjectOpen(false);
+                    invalidate();
+                  }}
+                />
+              </Dialog>
+            )}
+          </div>
         </div>
       </div>
 
@@ -344,6 +375,131 @@ function ProjectMaterialsSection({ projectId }: { projectId: string }) {
   );
 }
 
+function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: () => void }) {
+  const { allUsers } = useAuth();
+  const clients = allUsers.filter((u) => u.role === "client");
+  const [name, setName] = useState(project.project_name);
+  const [clientName, setClientName] = useState(project.client_name ?? "");
+  const [clientProfileId, setClientProfileId] = useState(project.client_profile_id ?? "none");
+  const [address, setAddress] = useState(project.site_address ?? "");
+  const [status, setStatus] = useState(project.status as StatusValue);
+  const [startDate, setStartDate] = useState(project.start_date ?? "");
+  const [targetDate, setTargetDate] = useState(project.expected_completion_date ?? "");
+
+  const save = useMutation({
+    mutationFn: () =>
+      updateProject(project.id, {
+        project_name: name.trim(),
+        client_name: clientName.trim() || null,
+        client_profile_id: clientProfileId === "none" ? null : clientProfileId,
+        site_address: address.trim() || null,
+        status,
+        start_date: startDate || null,
+        expected_completion_date: targetDate || null,
+      }),
+    onSuccess: () => {
+      toast.success("Project updated");
+      onDone();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <DialogContent className="sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Edit project</DialogTitle>
+      </DialogHeader>
+      <div className="grid gap-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="ep-name">Project name</Label>
+          <Input id="ep-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="grid gap-1.5 sm:grid-cols-2 sm:gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="ep-client">Client name</Label>
+            <Input
+              id="ep-client"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Status</Label>
+            <Select value={status} onValueChange={(v) => setStatus(v as StatusValue)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="planning">Planning</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="on_hold">On hold</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="grid gap-1.5">
+          <Label>Client account</Label>
+          <Select
+            value={clientProfileId}
+            onValueChange={(v) => {
+              setClientProfileId(v);
+              const picked = clients.find((c) => c.id === v);
+              if (picked) setClientName(picked.name);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No client account linked</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Link an existing client login so they can see this project and its client-visible
+            tasks.
+          </p>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="ep-addr">Site address</Label>
+          <Input id="ep-addr" value={address} onChange={(e) => setAddress(e.target.value)} />
+        </div>
+        <div className="grid gap-1.5 sm:grid-cols-2 sm:gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="ep-start">Start date</Label>
+            <Input
+              id="ep-start"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="ep-target">Target completion</Label>
+            <Input
+              id="ep-target"
+              type="date"
+              value={targetDate}
+              onChange={(e) => setTargetDate(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button disabled={!name.trim() || save.isPending} onClick={() => save.mutate()} variant="brand">
+          {save.isPending ? "Saving…" : "Save changes"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
 function AddPhaseDialog({
   projectId,
   nextOrder,
@@ -403,6 +559,7 @@ function AddTaskDialog({
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
   const [dueDate, setDueDate] = useState("");
+  const [clientVisible, setClientVisible] = useState(true);
   const m = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("tasks").insert({
@@ -413,6 +570,7 @@ function AddTaskDialog({
         priority,
         status: "not_started",
         due_date: dueDate || null,
+        client_visible: clientVisible,
       });
       if (error) throw error;
     },
@@ -461,6 +619,13 @@ function AddTaskDialog({
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={clientVisible}
+              onCheckedChange={(c) => setClientVisible(c === true)}
+            />
+            Visible to client
+          </label>
         </div>
         <DialogFooter>
           <Button
@@ -501,6 +666,7 @@ function EditTaskDialog({
   const [status, setStatus] = useState(task.dbStatus);
   const [assignedUserId, setAssignedUserId] = useState(task.assignedUserId ?? "unassigned");
   const [supervisorId, setSupervisorId] = useState(task.supervisorId ?? "unassigned");
+  const [clientVisible, setClientVisible] = useState(task.clientVisible);
   const [note, setNote] = useState("");
 
   const save = useMutation({
@@ -514,6 +680,7 @@ function EditTaskDialog({
         updates.due_date = dueDate || null;
         updates.assigned_user_id = assignedUserId === "unassigned" ? null : assignedUserId;
         updates.assigned_supervisor_id = supervisorId === "unassigned" ? null : supervisorId;
+        updates.client_visible = clientVisible;
       }
       updates.status = status;
       const { error } = await supabase.from("tasks").update(updates).eq("id", task.id);
@@ -769,6 +936,13 @@ function EditTaskDialog({
                   </SelectContent>
                 </Select>
               </div>
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                <Checkbox
+                  checked={clientVisible}
+                  onCheckedChange={(c) => setClientVisible(c === true)}
+                />
+                Visible to client
+              </label>
             </div>
           )}
 

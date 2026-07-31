@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { DbTask } from "./task-mapper";
 import { enrichTask, type EnrichedTask } from "./task-mapper";
-import type { Material, MaterialRequest, AttendanceLog, ChatMessage, Role } from "./types";
+import type { Material, MaterialRequest, AttendanceLog, ChatMessage, Role, Project } from "./types";
 
 export type ProjectMini = { id: string; project_name: string };
 export type PhaseMini = { id: string; phase_name: string; project_id: string };
@@ -14,7 +14,7 @@ export async function fetchEnrichedTasks(opts?: {
   let q = supabase
     .from("tasks")
     .select(
-      "id,task_title,description,status,priority,due_date,project_id,phase_id,assigned_user_id,assigned_supervisor_id,is_archived,submitted_for_review_at,approved_at,completed_at,rejection_reason",
+      "id,task_title,description,status,priority,due_date,project_id,phase_id,assigned_user_id,assigned_supervisor_id,is_archived,submitted_for_review_at,approved_at,completed_at,rejection_reason,client_visible",
     )
     .eq("is_archived", false)
     .order("due_date", { ascending: true, nullsFirst: false });
@@ -66,6 +66,7 @@ export async function fetchEnrichedTasks(opts?: {
 export async function createProjectFromTemplate(input: {
   project_name: string;
   client_name?: string | null;
+  client_profile_id?: string | null;
   site_address?: string | null;
   description?: string | null;
   status: "planning" | "active" | "on_hold" | "completed" | "cancelled";
@@ -85,6 +86,7 @@ export async function createProjectFromTemplate(input: {
     .insert({
       project_name: input.project_name,
       client_name: input.client_name ?? null,
+      client_profile_id: input.client_profile_id ?? null,
       site_address: input.site_address ?? null,
       description: input.description ?? null,
       status: input.status,
@@ -145,6 +147,7 @@ export async function createProjectFromTemplate(input: {
       priority: t.default_priority,
       status: "not_started" as const,
       due_date: due,
+      client_visible: true,
     };
   });
   if (taskRows.length) {
@@ -153,6 +156,59 @@ export async function createProjectFromTemplate(input: {
   }
 
   return { projectId: project.id, phases: phaseRows.length, tasks: taskRows.length };
+}
+
+/** Edit a project's core details, including (re)linking it to a client account. */
+export async function updateProject(
+  id: string,
+  input: {
+    project_name: string;
+    client_name?: string | null;
+    client_profile_id?: string | null;
+    site_address?: string | null;
+    status: "planning" | "active" | "on_hold" | "completed" | "cancelled";
+    start_date?: string | null;
+    expected_completion_date?: string | null;
+  },
+) {
+  const { error } = await supabase
+    .from("projects")
+    .update({
+      project_name: input.project_name,
+      client_name: input.client_name ?? null,
+      client_profile_id: input.client_profile_id ?? null,
+      site_address: input.site_address ?? null,
+      status: input.status,
+      start_date: input.start_date ?? null,
+      expected_completion_date: input.expected_completion_date ?? null,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/** Overwrite each project's `progress` with the real approved/total task ratio. */
+export async function attachProjectProgress(projects: Project[]): Promise<Project[]> {
+  if (projects.length === 0) return projects;
+  const ids = projects.map((p) => p.id);
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("project_id,status")
+    .in("project_id", ids)
+    .eq("is_archived", false);
+  if (error) throw error;
+
+  const counts = new Map<string, { total: number; approved: number }>();
+  for (const t of data ?? []) {
+    const c = counts.get(t.project_id) ?? { total: 0, approved: 0 };
+    c.total++;
+    if (t.status === "approved") c.approved++;
+    counts.set(t.project_id, c);
+  }
+
+  return projects.map((p) => {
+    const c = counts.get(p.id);
+    return c && c.total > 0 ? { ...p, progress: Math.round((c.approved / c.total) * 100) } : p;
+  });
 }
 
 /** Returns the current user's profile id (cached short-term). */

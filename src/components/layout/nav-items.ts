@@ -13,7 +13,6 @@ import {
   MessageSquare,
   Bell,
   Settings,
-  Archive,
   User as UserIcon,
   Briefcase,
   Image as ImageIcon,
@@ -37,13 +36,11 @@ const MGMT_NAV: NavItem[] = [
   { label: "Task Approvals", to: "/approvals", icon: CheckSquare },
   { label: "Materials", to: "/materials", icon: Package },
   { label: "Material Requests", to: "/material-requests", icon: PackagePlus },
-  { label: "Attendance", to: "/attendance", icon: Clock },
   { label: "Reports", to: "/reports", icon: BarChart3 },
   { label: "Users", to: "/users", icon: Users },
   { label: "Project Chat", to: "/chat", icon: MessageSquare },
   { label: "Notifications", to: "/notifications", icon: Bell },
   { label: "Settings", to: "/settings", icon: Settings },
-  { label: "Archive", to: "/archive", icon: Archive },
 ];
 
 const PM_NAV: NavItem[] = MGMT_NAV.filter(
@@ -57,7 +54,6 @@ const SUPERVISOR_NAV: NavItem[] = [
   { label: "Task Approvals", to: "/approvals", icon: CheckSquare },
   { label: "Materials", to: "/materials", icon: Package },
   { label: "Material Requests", to: "/material-requests", icon: PackagePlus },
-  { label: "Attendance", to: "/attendance", icon: Clock },
   { label: "Reports", to: "/reports", icon: BarChart3 },
   { label: "Project Chat", to: "/chat", icon: MessageSquare },
   { label: "Notifications", to: "/notifications", icon: Bell },

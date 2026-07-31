@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import {
   Outlet,
   Navigate,
@@ -13,7 +14,7 @@ import appCss from "../styles.css?url";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { ThemeProvider, useTheme, THEME_INIT_SCRIPT } from "@/lib/theme-context";
 import { AppShell } from "@/components/layout/AppShell";
-import { Logo } from "@/components/brand/Logo";
+import { LoadingSprite } from "@/components/brand/LoadingSprite";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -116,17 +117,37 @@ function ThemedToaster() {
   return <Toaster theme={theme} position="top-right" />;
 }
 
+// Keeps the loading sprite on screen for at least this long so it's
+// actually seen, even when auth resolves near-instantly from a warm session.
+const MIN_SPLASH_MS = 1800;
+
+function useMinDuration(active: boolean, ms: number) {
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
+
+  // Starts once on mount and runs to completion regardless of how `active`
+  // changes — a splash's minimum-visible time is measured from app start,
+  // not restarted every time the loading flag flips.
+  useEffect(() => {
+    const id = setTimeout(() => setMinTimeElapsed(true), ms);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return active || !minTimeElapsed;
+}
+
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { pathname } = useLocation();
   const isPublicRoute = pathname === "/" || pathname === "/login" || pathname === "/acknowledge";
+  const showSplash = useMinDuration(loading, MIN_SPLASH_MS);
 
   if (isPublicRoute) return children;
 
-  if (loading) {
+  if (showSplash) {
     return (
-      <div className="grid min-h-dvh place-items-center">
-        <Logo size={36} />
+      <div className="grid min-h-dvh place-items-center bg-background">
+        <LoadingSprite />
       </div>
     );
   }
