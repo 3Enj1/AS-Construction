@@ -10,7 +10,10 @@ export function ProjectCard({ project }: { project: Project }) {
       params={{ id: project.id }}
       className="as-card as-press group block overflow-hidden transition-shadow hover:border-brand/50 hover:shadow-glow-brand"
     >
-      <div className="relative h-28 w-full" style={{ background: project.coverGradient }}>
+      <div
+        className="dark relative h-28 w-full"
+        style={{ background: project.coverGradient }}
+      >
         <div className="absolute inset-0 bg-gradient-to-t from-card/95 to-transparent" />
         <div className="absolute left-4 top-4">
           <StatusPill status={project.status} kind="project" />

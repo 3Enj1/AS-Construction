@@ -17,9 +17,14 @@ features — see "Known gaps" below for what's still stubbed.
   using a service-role client — see `src/lib/auth.functions.ts`.
 
 ## Non-negotiable conventions
-- Dark theme with the AS red brand accent. Theme tokens live in
-  `src/styles.css` (`--brand`, `--danger`, `.as-card`, `.as-card-glass`,
-  `shadow-glow-brand`, etc). Reuse existing primitives in
+- User-toggleable light/dark theme with the AS red brand accent (dark was
+  the sole theme until light mode was added; default follows
+  `prefers-color-scheme`, overridable via the header toggle and persisted
+  to `localStorage`). Theme tokens live in `src/styles.css` — `:root` is
+  the light palette, `.dark` overrides it (`--brand`, `--danger`,
+  `.as-card`, `.as-card-glass`, `shadow-glow-brand`, etc). Theme state is
+  `src/lib/theme-context.tsx` (`ThemeProvider`/`useTheme`), toggled via
+  `src/components/theme/ThemeToggle.tsx`. Reuse existing primitives in
   `src/components/ui`. Never introduce a new styling system.
 - Roles are `app_role`: `admin | project_manager | site_supervisor | worker
   | subcontractor | client` (6, not 3). Authorization source of truth is

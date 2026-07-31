@@ -11,6 +11,7 @@ import {
 
 import appCss from "../styles.css?url";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { ThemeProvider, useTheme, THEME_INIT_SCRIPT } from "@/lib/theme-context";
 import { AppShell } from "@/components/layout/AppShell";
 import { Logo } from "@/components/brand/Logo";
 import { Toaster } from "@/components/ui/sonner";
@@ -62,7 +63,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { name: "theme-color", content: "#1a1a1a" },
+      { name: "theme-color", content: "#fcfcfd", media: "(prefers-color-scheme: light)" },
+      { name: "theme-color", content: "#1a1a1a", media: "(prefers-color-scheme: dark)" },
       { title: "AS Construction — Internal Management System" },
       {
         name: "description",
@@ -80,8 +82,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
       <body className="bg-background text-foreground antialiased">
@@ -96,14 +99,21 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AuthGate>
-          <Outlet />
-        </AuthGate>
-        <Toaster theme="dark" position="top-right" />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AuthGate>
+            <Outlet />
+          </AuthGate>
+          <ThemedToaster />
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
+}
+
+function ThemedToaster() {
+  const { theme } = useTheme();
+  return <Toaster theme={theme} position="top-right" />;
 }
 
 function AuthGate({ children }: { children: React.ReactNode }) {

@@ -8,6 +8,7 @@ import { getNavForRole, getMobileNavForRole } from "./nav-items";
 import { Bell, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -103,6 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="text-foreground font-medium">{user.name.split(" ")[0]}</span>
           </div>
         </div>
+        <ThemeToggle />
         <Link
           to="/notifications"
           className="relative grid size-9 place-items-center rounded-md border border-border hover:bg-accent as-press"

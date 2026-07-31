@@ -66,11 +66,73 @@
     0 8px 24px -16px rgb(0 0 0 / 0.6);
 }
 
-/* AS Construction — premium dark operational theme.
-   Near-black bg, charcoal surfaces, white text, red accent. */
+/* AS Construction — light and dark operational themes, red accent.
+   :root holds the light palette; .dark overrides it. Toggled at
+   runtime via a class on <html> — see src/lib/theme-context.tsx. */
 :root {
   --radius: 0.75rem;
 
+  --background: oklch(0.99 0.002 250);
+  --foreground: oklch(0.17 0.008 270);
+
+  --surface: oklch(0.97 0.003 250);
+  --surface-2: oklch(0.94 0.004 250);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.17 0.008 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.17 0.008 270);
+
+  --brand: oklch(0.55 0.215 27);          /* AS red */
+  --brand-foreground: oklch(0.99 0 0);
+
+  --primary: oklch(0.55 0.215 27);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.004 270);
+  --secondary-foreground: oklch(0.2 0.01 270);
+
+  --muted: oklch(0.95 0.004 270);
+  --muted-foreground: oklch(0.46 0.012 260);
+  --accent: oklch(0.93 0.006 270);
+  --accent-foreground: oklch(0.18 0.008 270);
+
+  --success: oklch(0.5 0.15 152);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.55 0.16 75);
+  --warning-foreground: oklch(0.99 0 0);
+  /* Danger is deliberately a different, cooler red than --brand (hue 27) so
+     alert states never get mistaken for normal brand-accent UI. */
+  --danger: oklch(0.5 0.22 18);
+  --danger-foreground: oklch(0.99 0 0);
+  --info: oklch(0.5 0.13 230);
+  --info-foreground: oklch(0.99 0 0);
+
+  --destructive: oklch(0.5 0.22 18);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --border: oklch(0.88 0.006 270);
+  --input: oklch(0.88 0.006 270);
+  --ring: oklch(0.55 0.215 27 / 0.5);
+
+  --chart-1: oklch(0.55 0.215 27);
+  --chart-2: oklch(0.5 0.15 152);
+  --chart-3: oklch(0.55 0.16 75);
+  --chart-4: oklch(0.5 0.13 230);
+  --chart-5: oklch(0.46 0.012 260);
+
+  --sidebar: oklch(0.97 0.003 250);
+  --sidebar-foreground: oklch(0.18 0.008 270);
+  --sidebar-primary: oklch(0.55 0.215 27);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.93 0.006 270);
+  --sidebar-accent-foreground: oklch(0.18 0.008 270);
+  --sidebar-border: oklch(0.88 0.006 270);
+  --sidebar-ring: oklch(0.55 0.215 27 / 0.5);
+}
+
+/* Near-black bg, charcoal surfaces, white text, red accent — the
+   original dark operational theme. */
+.dark {
   --background: oklch(0.16 0.005 270);
   --foreground: oklch(0.98 0.003 250);
 
@@ -82,7 +144,7 @@
   --popover: oklch(0.21 0.006 270);
   --popover-foreground: oklch(0.98 0.003 250);
 
-  --brand: oklch(0.62 0.215 27);          /* AS red */
+  --brand: oklch(0.62 0.215 27);
   --brand-foreground: oklch(0.99 0 0);
 
   --primary: oklch(0.62 0.215 27);
@@ -99,8 +161,6 @@
   --success-foreground: oklch(0.12 0.02 152);
   --warning: oklch(0.78 0.16 75);
   --warning-foreground: oklch(0.18 0.04 75);
-  /* Danger is deliberately a different, cooler red than --brand (hue 27) so
-     alert states never get mistaken for normal brand-accent UI. */
   --danger: oklch(0.58 0.22 18);
   --danger-foreground: oklch(0.99 0 0);
   --info: oklch(0.7 0.13 230);
@@ -127,12 +187,6 @@
   --sidebar-accent-foreground: oklch(0.98 0.003 250);
   --sidebar-border: oklch(0.3 0.006 270 / 0.6);
   --sidebar-ring: oklch(0.62 0.215 27 / 0.6);
-}
-
-.dark {
-  /* same as root — app is dark-first */
-  --background: oklch(0.16 0.005 270);
-  --foreground: oklch(0.98 0.003 250);
 }
 
 @layer base {
