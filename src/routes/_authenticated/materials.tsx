@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Pill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { fetchMaterials, addMaterial, receiveStock } from "@/lib/project-actions";
 import type { Material } from "@/lib/types";
@@ -35,6 +36,22 @@ function MaterialsPage() {
     queryKey: ["materials"],
     queryFn: fetchMaterials,
   });
+
+  // Live stock: any insert/update/delete on materials (e.g. another user
+  // receiving stock or logging usage) refreshes this view immediately.
+  useEffect(() => {
+    const channel = supabase
+      .channel("materials-stock")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "materials" },
+        () => qc.invalidateQueries({ queryKey: ["materials"] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc]);
 
   return (
     <>
