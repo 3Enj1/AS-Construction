@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatusPill } from "@/components/ui/status-pill";
 import { StatCard } from "@/components/ui/stat-card";
@@ -36,21 +36,26 @@ import {
   type EnrichedTask,
 } from "@/lib/task-mapper";
 import { formatDate } from "@/lib/format";
+import { imageForId } from "@/lib/stock-images";
 import {
   addProjectExpense,
   deleteProjectExpense,
   fetchMaterials,
   fetchMaterialTransactionsForProject,
   fetchProjectExpenses,
+  getSignedPhotoUrls,
   logMaterialUsage,
   updateProject,
+  uploadTaskPhoto,
 } from "@/lib/project-actions";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   Calendar,
+  Camera,
   CheckCircle2,
   ClipboardList,
+  ImageIcon,
   Layers,
   MapPin,
   Package,
@@ -59,6 +64,7 @@ import {
   Trash2,
   TrendingUp,
   Wallet,
+  X,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/projects/$id")({
@@ -171,7 +177,17 @@ function ProjectDetail() {
       >
         <ArrowLeft className="size-3.5" /> All projects
       </Link>
-      <div className="mt-3 as-card p-5 sm:p-6">
+      <div className="mt-3 as-card overflow-hidden">
+        <div className="dark relative h-32 w-full sm:h-40">
+          <img
+            src={imageForId(project.id)}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 size-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
+        </div>
+        <div className="p-5 sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="font-mono text-xs text-muted-foreground">{code}</div>
@@ -218,6 +234,7 @@ function ProjectDetail() {
               </Dialog>
             )}
           </div>
+        </div>
         </div>
       </div>
 
@@ -451,7 +468,7 @@ function ProjectBudgetSection({
         </Dialog>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-3">
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label="Budget" value={budget != null ? money(budget) : "—"} icon={Wallet} tone="brand" />
         <StatCard label="Spent" value={money(spent)} icon={Wallet} tone="warning" />
         <StatCard
@@ -867,7 +884,7 @@ function EditTaskDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
-  // (no router navigation needed inside dialog)
+  const qc = useQueryClient();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
   const [priority, setPriority] = useState(PRIORITY_UI_TO_DB[task.priority]);
@@ -877,6 +894,26 @@ function EditTaskDialog({
   const [supervisorId, setSupervisorId] = useState(task.supervisorId ?? "unassigned");
   const [clientVisible, setClientVisible] = useState(task.clientVisible);
   const [note, setNote] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: taskPhotos = [] } = useQuery({
+    queryKey: ["task-photos", task.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("task_photos")
+        .select("id,file_url,created_at")
+        .eq("task_id", task.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: taskPhotoUrls = new Map<string, string>() } = useQuery({
+    queryKey: ["task-photo-urls", taskPhotos.map((p) => p.file_url)],
+    queryFn: () => getSignedPhotoUrls(taskPhotos.map((p) => p.file_url)),
+    enabled: taskPhotos.length > 0,
+  });
 
   const save = useMutation({
     mutationFn: async () => {
@@ -914,6 +951,15 @@ function EditTaskDialog({
 
   const addNote = useMutation({
     mutationFn: async () => {
+      if (photo) {
+        await uploadTaskPhoto({
+          projectId: task.projectId,
+          taskId: task.id,
+          file: photo,
+          category: "progress",
+          note: note || null,
+        });
+      }
       const { data: u } = await supabase.auth.getUser();
       const { data: me } = await supabase
         .from("profiles")
@@ -932,13 +978,24 @@ function EditTaskDialog({
     onSuccess: () => {
       toast.success("Update added");
       setNote("");
-      qcInvalidate(task.id);
+      setPhoto(null);
+      qc.invalidateQueries({ queryKey: ["task-photos", task.id] });
+      qc.invalidateQueries({ queryKey: ["task-updates", task.id] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const submitReview = useMutation({
     mutationFn: async () => {
+      if (photo) {
+        await uploadTaskPhoto({
+          projectId: task.projectId,
+          taskId: task.id,
+          file: photo,
+          category: "completion",
+          note: note || null,
+        });
+      }
       const { data: u } = await supabase.auth.getUser();
       const { data: me } = await supabase
         .from("profiles")
@@ -997,11 +1054,6 @@ function EditTaskDialog({
     },
     onError: (e: Error) => toast.error(e.message),
   });
-
-  const qcInvalidate = (taskId: string) => {
-    // hook into outer query client by triggering done -> caller invalidates
-    void taskId;
-  };
 
   const [usageMaterialId, setUsageMaterialId] = useState("");
   const [usageQty, setUsageQty] = useState("");
@@ -1164,14 +1216,59 @@ function EditTaskDialog({
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="What's the latest?"
               />
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+              />
+              {photo ? (
+                <div className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-2 text-sm">
+                  <span className="truncate">{photo.name}</span>
+                  <button type="button" onClick={() => setPhoto(null)} className="text-muted-foreground hover:text-foreground">
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="justify-self-start"
+                  onClick={() => photoInputRef.current?.click()}
+                >
+                  <Camera className="size-4" /> Add photo (optional)
+                </Button>
+              )}
+              {taskPhotos.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {taskPhotos.map((p) => {
+                    const src = taskPhotoUrls.get(p.file_url);
+                    return (
+                      <div
+                        key={p.id}
+                        className="grid size-12 place-items-center overflow-hidden rounded-md bg-surface-2"
+                      >
+                        {src ? (
+                          <img src={src} alt="Task photo" className="size-full object-cover" />
+                        ) : (
+                          <ImageIcon className="size-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!note.trim() || addNote.isPending}
+                  disabled={(!note.trim() && !photo) || addNote.isPending}
                   onClick={() => addNote.mutate()}
                 >
-                  Add note
+                  {addNote.isPending ? "Adding…" : "Add note"}
                 </Button>
                 {isOwner &&
                   task.dbStatus !== "submitted_for_review" &&
@@ -1182,7 +1279,7 @@ function EditTaskDialog({
                       disabled={submitReview.isPending}
                       onClick={() => submitReview.mutate()}
                     >
-                      Submit for review
+                      {submitReview.isPending ? "Submitting…" : "Submit for review"}
                     </Button>
                   )}
               </div>
