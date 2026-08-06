@@ -14,10 +14,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchEnrichedTasks } from "@/lib/project-actions";
+import { fetchEnrichedTasks, getSignedPhotoUrls } from "@/lib/project-actions";
 import { useAuth } from "@/lib/auth-context";
 import type { EnrichedTask } from "@/lib/task-mapper";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, ImageIcon, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/approvals")({
@@ -36,6 +36,29 @@ function ApprovalsPage() {
     queryFn: () => fetchEnrichedTasks(),
   });
   const pending = tasks.filter((t) => t.dbStatus === "submitted_for_review");
+  const pendingIds = pending.map((t) => t.id);
+
+  const { data: photos = [] } = useQuery({
+    queryKey: ["approval-photos", pendingIds],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("task_photos")
+        .select("task_id,file_url,created_at")
+        .in("task_id", pendingIds)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: pendingIds.length > 0,
+  });
+  const latestPhotoByTask = new Map<string, string>();
+  for (const p of photos) if (!latestPhotoByTask.has(p.task_id)) latestPhotoByTask.set(p.task_id, p.file_url);
+
+  const { data: photoUrls = new Map<string, string>() } = useQuery({
+    queryKey: ["approval-photo-urls", photos.map((p) => p.file_url)],
+    queryFn: () => getSignedPhotoUrls(photos.map((p) => p.file_url)),
+    enabled: photos.length > 0,
+  });
 
   const approve = useMutation({
     mutationFn: async (t: EnrichedTask) => {
@@ -102,8 +125,19 @@ function ApprovalsPage() {
         ) : (
           pending.map((t) => {
             const submitter = t.assignees[0];
+            const photoPath = latestPhotoByTask.get(t.id);
+            const photoSrc = photoPath ? photoUrls.get(photoPath) : undefined;
             return (
               <div key={t.id} className="p-4 flex flex-wrap items-center justify-between gap-4">
+                {photoPath && (
+                  <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-md bg-surface-2">
+                    {photoSrc ? (
+                      <img src={photoSrc} alt="Completion photo" className="size-full object-cover" />
+                    ) : (
+                      <ImageIcon className="size-5 text-muted-foreground" />
+                    )}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] font-mono text-muted-foreground">{t.projectCode}</div>
                   <div className="mt-0.5 font-medium">{t.title}</div>

@@ -1,17 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchChatMessages, fetchProjectsMini, sendChatMessage } from "@/lib/project-actions";
+import {
+  fetchChatMessages,
+  fetchProjectsMini,
+  getSignedChatUrls,
+  sendChatMessage,
+  uploadChatAttachment,
+  type ChatAttachment,
+} from "@/lib/project-actions";
 import { gradientFromId } from "@/lib/project-mapper";
 import { codeFromProjectId } from "@/lib/task-mapper";
 import type { ChatMessage } from "@/lib/types";
 import { relativeFromNow } from "@/lib/format";
-import { Send } from "lucide-react";
+import { Paperclip, Send, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/chat")({
@@ -23,6 +30,8 @@ function ChatPage() {
   const qc = useQueryClient();
   const [active, setActive] = useState<string | null>(null);
   const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects", "select"],
@@ -34,6 +43,15 @@ function ChatPage() {
     queryKey: ["chat-messages", activeId],
     queryFn: () => fetchChatMessages(activeId!),
     enabled: !!activeId,
+  });
+
+  const attachmentPaths = messages
+    .map((m) => m.attachmentUrl)
+    .filter((u): u is string => !!u);
+  const { data: attachmentUrls = new Map<string, string>() } = useQuery({
+    queryKey: ["chat-attachment-urls", attachmentPaths],
+    queryFn: () => getSignedChatUrls(attachmentPaths),
+    enabled: attachmentPaths.length > 0,
   });
 
   // Live updates: append new messages pushed from Supabase Realtime for the active project.
@@ -56,6 +74,9 @@ function ChatPage() {
             sender_id: string;
             message: string;
             created_at: string;
+            attachment_url: string | null;
+            attachment_type: string | null;
+            attachment_name: string | null;
           };
           const incoming: ChatMessage = {
             id: row.id,
@@ -63,6 +84,9 @@ function ChatPage() {
             userId: row.sender_id,
             text: row.message,
             at: row.created_at,
+            attachmentUrl: row.attachment_url,
+            attachmentType: row.attachment_type,
+            attachmentName: row.attachment_name,
           };
           qc.setQueryData<ChatMessage[]>(["chat-messages", activeId], (old = []) =>
             old.some((m) => m.id === incoming.id) ? old : [...old, incoming],
@@ -76,19 +100,24 @@ function ChatPage() {
   }, [activeId, qc]);
 
   const send = useMutation({
-    mutationFn: () => sendChatMessage(activeId!, text.trim()),
+    mutationFn: async () => {
+      let attachment: ChatAttachment | null = null;
+      if (file) attachment = await uploadChatAttachment(activeId!, file);
+      return sendChatMessage(activeId!, text.trim(), attachment);
+    },
     onSuccess: (msg) => {
       qc.setQueryData<ChatMessage[]>(["chat-messages", activeId], (old = []) =>
         old.some((m) => m.id === msg.id) ? old : [...old, msg],
       );
       setText("");
+      setFile(null);
     },
     onError: (e: Error) => toast.error(e.message || "Could not send message"),
   });
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || !activeId) return;
+    if ((!text.trim() && !file) || !activeId) return;
     send.mutate();
   };
 
@@ -137,7 +166,27 @@ function ChatPage() {
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       {u?.name.split(" ")[0] ?? "Unknown"} · {relativeFromNow(m.at)}
                     </div>
-                    <div className="mt-0.5">{m.text}</div>
+                    {m.attachmentUrl && (
+                      m.attachmentType?.startsWith("image/") ? (
+                        <a href={attachmentUrls.get(m.attachmentUrl)} target="_blank" rel="noreferrer">
+                          <img
+                            src={attachmentUrls.get(m.attachmentUrl)}
+                            alt={m.attachmentName ?? "Attachment"}
+                            className="mt-1 max-h-48 rounded-md object-cover"
+                          />
+                        </a>
+                      ) : (
+                        <a
+                          href={attachmentUrls.get(m.attachmentUrl)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-1.5 text-xs underline"
+                        >
+                          <Paperclip className="size-3.5" /> {m.attachmentName ?? "Attachment"}
+                        </a>
+                      )
+                    )}
+                    {m.text && <div className="mt-0.5">{m.text}</div>}
                   </div>
                 </div>
               );
@@ -148,7 +197,33 @@ function ChatPage() {
               </div>
             )}
           </div>
+          {file && (
+            <div className="flex items-center justify-between border-t border-border bg-surface-2 px-3 py-2 text-xs">
+              <span className="flex items-center gap-1.5 truncate">
+                <Paperclip className="size-3.5" /> {file.name}
+              </span>
+              <button type="button" onClick={() => setFile(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="size-4" />
+              </button>
+            </div>
+          )}
           <form onSubmit={submit} className="flex items-center gap-2 border-t border-border p-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="size-11 shrink-0"
+              disabled={!activeId}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip className="size-4" />
+            </Button>
             <input
               className="flex-1 h-11 rounded-md bg-surface-2 border border-border px-3 text-sm"
               placeholder="Type a message..."
@@ -160,8 +235,8 @@ function ChatPage() {
               type="submit"
               size="icon"
               variant="brand"
-              className="size-11"
-              disabled={!text.trim() || !activeId || send.isPending}
+              className="size-11 shrink-0"
+              disabled={(!text.trim() && !file) || !activeId || send.isPending}
             >
               <Send className="size-4" />
             </Button>

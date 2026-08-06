@@ -734,7 +734,13 @@ type DbChatMessage = {
   sender_id: string;
   message: string;
   created_at: string;
+  attachment_url: string | null;
+  attachment_type: string | null;
+  attachment_name: string | null;
 };
+
+const CHAT_MESSAGE_COLUMNS =
+  "id,project_id,sender_id,message,created_at,attachment_url,attachment_type,attachment_name";
 
 function mapChatMessage(m: DbChatMessage): ChatMessage {
   return {
@@ -743,26 +749,67 @@ function mapChatMessage(m: DbChatMessage): ChatMessage {
     userId: m.sender_id,
     text: m.message,
     at: m.created_at,
+    attachmentUrl: m.attachment_url,
+    attachmentType: m.attachment_type,
+    attachmentName: m.attachment_name,
   };
 }
 
 export async function fetchChatMessages(projectId: string): Promise<ChatMessage[]> {
   const { data, error } = await supabase
     .from("chat_messages")
-    .select("id,project_id,sender_id,message,created_at")
+    .select(CHAT_MESSAGE_COLUMNS)
     .eq("project_id", projectId)
     .order("created_at", { ascending: true });
   if (error) throw error;
   return ((data as DbChatMessage[]) ?? []).map(mapChatMessage);
 }
 
-export async function sendChatMessage(projectId: string, text: string): Promise<ChatMessage> {
+export type ChatAttachment = { url: string; type: string; name: string };
+
+/** Upload a chat file/image to Storage. Returns the storage path plus display metadata. */
+export async function uploadChatAttachment(projectId: string, file: File): Promise<ChatAttachment> {
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
+  const path = `${projectId}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage
+    .from("chat-attachments")
+    .upload(path, file, { contentType: file.type || undefined });
+  if (error) throw error;
+  return { url: path, type: file.type || "application/octet-stream", name: file.name };
+}
+
+/** Signed, time-limited URLs for private chat-attachments storage paths, keyed by path. */
+export async function getSignedChatUrls(paths: string[]): Promise<Map<string, string>> {
+  if (paths.length === 0) return new Map();
+  const { data, error } = await supabase.storage
+    .from("chat-attachments")
+    .createSignedUrls(paths, 3600);
+  if (error) throw error;
+  const map = new Map<string, string>();
+  for (const item of data ?? []) {
+    if (item.signedUrl && item.path) map.set(item.path, item.signedUrl);
+  }
+  return map;
+}
+
+export async function sendChatMessage(
+  projectId: string,
+  text: string,
+  attachment?: ChatAttachment | null,
+): Promise<ChatMessage> {
   const meId = await currentProfileId();
   if (!meId) throw new Error("Not signed in");
   const { data, error } = await supabase
     .from("chat_messages")
-    .insert({ project_id: projectId, sender_id: meId, message: text })
-    .select("id,project_id,sender_id,message,created_at")
+    .insert({
+      project_id: projectId,
+      sender_id: meId,
+      message: text,
+      attachment_url: attachment?.url ?? null,
+      attachment_type: attachment?.type ?? null,
+      attachment_name: attachment?.name ?? null,
+    })
+    .select(CHAT_MESSAGE_COLUMNS)
     .single();
   if (error) throw error;
   return mapChatMessage(data as DbChatMessage);

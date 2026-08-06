@@ -138,6 +138,9 @@ export interface ChatMessage {
   userId: string;
   text: string;
   at: string;
+  attachmentUrl: string | null;
+  attachmentType: string | null;
+  attachmentName: string | null;
 }
 
 export interface Notification {
