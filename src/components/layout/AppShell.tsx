@@ -7,8 +7,9 @@ import { ROLE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { fetchUnreadNotificationCount } from "@/lib/project-actions";
 import { getNavForRole, getMobileNavForRole } from "./nav-items";
+import { playNotifySound, vibrate } from "@/lib/feedback";
 import { Bell, LogOut, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
@@ -23,6 +24,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     enabled: !!user,
     refetchInterval: 60_000,
   });
+
+  // Notify (sound + vibration) only when unread count *rises* — never on first
+  // load, so existing unread notifications from before this session don't fire it.
+  const prevUnreadRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (prevUnreadRef.current !== undefined && unreadCount > prevUnreadRef.current) {
+      playNotifySound();
+      vibrate(20);
+    }
+    prevUnreadRef.current = unreadCount;
+  }, [unreadCount]);
 
   if (!user) return null;
 

@@ -18,6 +18,7 @@ import { gradientFromId } from "@/lib/project-mapper";
 import { codeFromProjectId } from "@/lib/task-mapper";
 import type { ChatMessage } from "@/lib/types";
 import { relativeFromNow } from "@/lib/format";
+import { playChatSound, vibrate } from "@/lib/feedback";
 import { Paperclip, Send, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -91,13 +92,17 @@ function ChatPage() {
           qc.setQueryData<ChatMessage[]>(["chat-messages", activeId], (old = []) =>
             old.some((m) => m.id === incoming.id) ? old : [...old, incoming],
           );
+          if (incoming.userId !== user?.id) {
+            playChatSound();
+            vibrate(15);
+          }
         },
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeId, qc]);
+  }, [activeId, qc, user?.id]);
 
   const send = useMutation({
     mutationFn: async () => {
