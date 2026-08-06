@@ -1040,9 +1040,12 @@ export type Database = {
           attachment_type: string | null
           attachment_url: string | null
           created_at: string
+          deleted_at: string | null
+          edited_at: string | null
           id: string
           message: string
           project_id: string
+          reply_to_id: string | null
           sender_id: string
         }
         Insert: {
@@ -1050,9 +1053,12 @@ export type Database = {
           attachment_type?: string | null
           attachment_url?: string | null
           created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
           id?: string
           message: string
           project_id: string
+          reply_to_id?: string | null
           sender_id: string
         }
         Update: {
@@ -1060,9 +1066,12 @@ export type Database = {
           attachment_type?: string | null
           attachment_url?: string | null
           created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
           id?: string
           message?: string
           project_id?: string
+          reply_to_id?: string | null
           sender_id?: string
         }
         Relationships: [
@@ -1074,8 +1083,87 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "chat_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "chat_messages_sender_id_fkey"
             columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          id?: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_reads: {
+        Row: {
+          last_read_at: string
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          last_read_at?: string
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          last_read_at?: string
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_reads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_reads_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

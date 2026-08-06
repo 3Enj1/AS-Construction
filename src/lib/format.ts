@@ -29,6 +29,19 @@ export function relativeFromNow(iso: string) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+/** "Today" / "Yesterday" / a short date, for chat-style date dividers. */
+export function dateDividerLabel(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(d, today)) return "Today";
+  if (sameDay(d, yesterday)) return "Yesterday";
+  return d.toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 export function initials(name: string) {
   return name
     .split(" ")

@@ -141,6 +141,16 @@ export interface ChatMessage {
   attachmentUrl: string | null;
   attachmentType: string | null;
   attachmentName: string | null;
+  replyToId: string | null;
+  editedAt: string | null;
+  deletedAt: string | null;
+}
+
+export interface ChatReaction {
+  id: string;
+  messageId: string;
+  userId: string;
+  emoji: string;
 }
 
 export interface Notification {

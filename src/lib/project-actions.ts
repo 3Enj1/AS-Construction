@@ -6,6 +6,7 @@ import type {
   MaterialRequest,
   AttendanceLog,
   ChatMessage,
+  ChatReaction,
   Role,
   Project,
   Notification,
@@ -737,10 +738,13 @@ type DbChatMessage = {
   attachment_url: string | null;
   attachment_type: string | null;
   attachment_name: string | null;
+  reply_to_id: string | null;
+  edited_at: string | null;
+  deleted_at: string | null;
 };
 
 const CHAT_MESSAGE_COLUMNS =
-  "id,project_id,sender_id,message,created_at,attachment_url,attachment_type,attachment_name";
+  "id,project_id,sender_id,message,created_at,attachment_url,attachment_type,attachment_name,reply_to_id,edited_at,deleted_at";
 
 function mapChatMessage(m: DbChatMessage): ChatMessage {
   return {
@@ -752,6 +756,9 @@ function mapChatMessage(m: DbChatMessage): ChatMessage {
     attachmentUrl: m.attachment_url,
     attachmentType: m.attachment_type,
     attachmentName: m.attachment_name,
+    replyToId: m.reply_to_id,
+    editedAt: m.edited_at,
+    deletedAt: m.deleted_at,
   };
 }
 
@@ -763,6 +770,88 @@ export async function fetchChatMessages(projectId: string): Promise<ChatMessage[
     .order("created_at", { ascending: true });
   if (error) throw error;
   return ((data as DbChatMessage[]) ?? []).map(mapChatMessage);
+}
+
+export async function editChatMessage(messageId: string, text: string): Promise<void> {
+  const { error } = await supabase
+    .from("chat_messages")
+    .update({ message: text, edited_at: new Date().toISOString() })
+    .eq("id", messageId);
+  if (error) throw error;
+}
+
+export async function deleteChatMessage(messageId: string): Promise<void> {
+  const { error } = await supabase
+    .from("chat_messages")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", messageId);
+  if (error) throw error;
+}
+
+/** Marks the project's chat as read up to now for the current user. */
+export async function markChatRead(projectId: string): Promise<void> {
+  const meId = await currentProfileId();
+  if (!meId) return;
+  const { error } = await supabase
+    .from("chat_reads")
+    .upsert(
+      { project_id: projectId, user_id: meId, last_read_at: new Date().toISOString() },
+      { onConflict: "project_id,user_id" },
+    );
+  if (error) throw error;
+}
+
+export type ChatRead = { userId: string; lastReadAt: string };
+
+/** Every project member's read pointer, used to derive "seen" ticks. */
+export async function fetchChatReads(projectId: string): Promise<ChatRead[]> {
+  const { data, error } = await supabase
+    .from("chat_reads")
+    .select("user_id,last_read_at")
+    .eq("project_id", projectId);
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ userId: r.user_id, lastReadAt: r.last_read_at }));
+}
+
+function mapReaction(r: { id: string; message_id: string; user_id: string; emoji: string }): ChatReaction {
+  return { id: r.id, messageId: r.message_id, userId: r.user_id, emoji: r.emoji };
+}
+
+export async function fetchChatReactions(messageIds: string[]): Promise<ChatReaction[]> {
+  if (messageIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("chat_reactions")
+    .select("id,message_id,user_id,emoji")
+    .in("message_id", messageIds);
+  if (error) throw error;
+  return (data ?? []).map(mapReaction);
+}
+
+/** Set (or change) the current user's reaction on a message. */
+export async function setChatReaction(messageId: string, emoji: string): Promise<ChatReaction> {
+  const meId = await currentProfileId();
+  if (!meId) throw new Error("Not signed in");
+  const { data, error } = await supabase
+    .from("chat_reactions")
+    .upsert(
+      { message_id: messageId, user_id: meId, emoji },
+      { onConflict: "message_id,user_id" },
+    )
+    .select("id,message_id,user_id,emoji")
+    .single();
+  if (error) throw error;
+  return mapReaction(data);
+}
+
+export async function removeChatReaction(messageId: string): Promise<void> {
+  const meId = await currentProfileId();
+  if (!meId) return;
+  const { error } = await supabase
+    .from("chat_reactions")
+    .delete()
+    .eq("message_id", messageId)
+    .eq("user_id", meId);
+  if (error) throw error;
 }
 
 export type ChatAttachment = { url: string; type: string; name: string };
@@ -796,6 +885,7 @@ export async function sendChatMessage(
   projectId: string,
   text: string,
   attachment?: ChatAttachment | null,
+  replyToId?: string | null,
 ): Promise<ChatMessage> {
   const meId = await currentProfileId();
   if (!meId) throw new Error("Not signed in");
@@ -808,6 +898,7 @@ export async function sendChatMessage(
       attachment_url: attachment?.url ?? null,
       attachment_type: attachment?.type ?? null,
       attachment_name: attachment?.name ?? null,
+      reply_to_id: replyToId ?? null,
     })
     .select(CHAT_MESSAGE_COLUMNS)
     .single();
