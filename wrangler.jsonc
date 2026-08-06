@@ -1,7 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "tanstack-start-app",
+  "name": "as-construction-hub",
   "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server.ts",
+  "observability": {
+    "enabled": true,
+  },
+  // Runtime vars/secrets are intentionally NOT set here.
+  // Non-secret vars (SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) and the
+  // SUPABASE_SERVICE_ROLE_KEY secret are configured in the Cloudflare
+  // dashboard (Settings > Variables & Secrets) or via `wrangler secret put`,
+  // never committed to source. See deployment guide for exact steps.
 }

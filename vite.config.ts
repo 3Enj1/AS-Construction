@@ -9,7 +9,12 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
-  nitro: process.env.VERCEL ? true : false,
+  // The deploy plugin only runs during `vite build` (never `vite dev`), and
+  // needs an explicit preset — passing a bare boolean lets it silently fall
+  // back to its own default instead of reliably targeting each platform.
+  nitro: {
+    preset: process.env.VERCEL ? "vercel" : "cloudflare-module",
+  },
 
   tanstackStart: {
     server: {
