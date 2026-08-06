@@ -230,6 +230,17 @@
     height: 1px;
     background: linear-gradient(90deg, transparent, var(--color-border), transparent);
   }
+  .as-kenburns {
+    animation: as-kenburns 24s ease-in-out infinite alternate;
+  }
+  @keyframes as-kenburns {
+    from {
+      transform: scale(1) translate(0, 0);
+    }
+    to {
+      transform: scale(1.08) translate(-1%, -1%);
+    }
+  }
   .as-press {
     transition: transform 120ms ease, box-shadow 120ms ease, background-color 150ms ease;
   }

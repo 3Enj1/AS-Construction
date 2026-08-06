@@ -49,17 +49,17 @@ function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-dvh bg-background text-foreground">
+    <div className="dark relative min-h-dvh overflow-hidden bg-background text-foreground">
+      <img
+        src={imageForId("login-hero")}
+        alt=""
+        className="as-kenburns absolute inset-0 size-full object-cover"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/50" />
       <div className="absolute inset-0 as-grain pointer-events-none" />
       <div className="relative mx-auto grid min-h-dvh max-w-6xl items-center gap-8 px-5 py-10 lg:grid-cols-2 lg:gap-16 lg:py-16">
         {/* Brand panel */}
-        <div className="dark relative hidden overflow-hidden rounded-2xl lg:flex lg:flex-col lg:justify-between lg:h-full lg:p-8">
-          <img
-            src={imageForId("login-hero")}
-            alt=""
-            className="absolute inset-0 -z-10 size-full object-cover"
-          />
-          <div className="absolute inset-0 -z-10 bg-gradient-to-t from-background via-background/85 to-background/40" />
+        <div className="hidden lg:flex lg:flex-col lg:justify-between lg:h-full">
           <Logo size={36} />
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
