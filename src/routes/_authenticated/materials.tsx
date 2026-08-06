@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { fetchMaterials, addMaterial, receiveStock } from "@/lib/project-actions";
 import type { Material } from "@/lib/types";
+import { imageForMaterial } from "@/lib/stock-images";
 import { toast } from "sonner";
 import { Package, PackagePlus, Plus } from "lucide-react";
 
@@ -86,6 +87,7 @@ function MaterialsPage() {
             const ratio = m.stock / Math.max(m.threshold, 1);
             const tone = m.stock === 0 ? "danger" : ratio < 1 ? "warning" : "success";
             const pct = Math.min(100, Math.round(ratio * 100));
+            const icon = imageForMaterial(m.name, m.category);
             return (
               <div key={m.id} className="as-card p-4">
                 <div className="flex items-start justify-between">
@@ -95,8 +97,12 @@ function MaterialsPage() {
                     </div>
                     <div className="text-base font-semibold leading-tight">{m.name}</div>
                   </div>
-                  <div className="grid size-9 place-items-center rounded-md bg-muted text-muted-foreground">
-                    <Package className="size-4" />
+                  <div className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-md bg-muted text-muted-foreground">
+                    {icon ? (
+                      <img src={icon} alt="" className="size-full object-cover" loading="lazy" />
+                    ) : (
+                      <Package className="size-4" />
+                    )}
                   </div>
                 </div>
                 <div className="mt-4 flex items-baseline justify-between">

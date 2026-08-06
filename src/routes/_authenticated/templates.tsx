@@ -8,6 +8,7 @@ import { TemplateBuilderDialog } from "@/components/templates/TemplateBuilderDia
 import { useAuth } from "@/lib/auth-context";
 import { archiveTemplate, fetchTemplates, type TemplateFull } from "@/lib/project-actions";
 import { templateVisual } from "@/lib/template-visuals";
+import { imageForTemplateCategory } from "@/lib/stock-images";
 import { toast } from "sonner";
 import { ArrowRight, Pencil, Plus, Trash2 } from "lucide-react";
 
@@ -92,13 +93,19 @@ function TemplatesPage() {
                 className="as-card animate-in fade-in slide-in-from-bottom-2 overflow-hidden duration-500 fill-mode-both"
                 style={{ animationDelay: `${idx * 70}ms` }}
               >
-                <div className="relative h-20 w-full" style={{ background: visual.gradient }}>
-                  <Icon className="absolute -bottom-3 -right-3 size-20 text-white/10" />
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 rounded-full bg-black/20 px-2.5 py-1 text-[11px] uppercase tracking-wider text-white/90 backdrop-blur-sm">
+                <div className="dark relative h-36 w-full" style={{ background: visual.gradient }}>
+                  <img
+                    src={imageForTemplateCategory(tpl.category)}
+                    alt=""
+                    loading="lazy"
+                    className="absolute inset-0 size-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/30" />
+                  <div className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-black/30 px-2.5 py-1 text-[11px] uppercase tracking-wider text-white/90 backdrop-blur-sm">
                     <Icon className="size-3.5" /> {visual.label}
                   </div>
                 </div>
-                <div className="p-5">
+                <div className="as-card-glass relative -mt-6 mx-3 rounded-b-none p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="text-lg font-semibold tracking-tight">{tpl.name}</h3>
