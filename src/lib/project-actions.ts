@@ -22,7 +22,7 @@ export async function fetchEnrichedTasks(opts?: {
   let q = supabase
     .from("tasks")
     .select(
-      "id,task_title,description,status,priority,due_date,project_id,phase_id,assigned_user_id,assigned_supervisor_id,is_archived,submitted_for_review_at,approved_at,completed_at,rejection_reason,client_visible",
+      "id,task_title,description,status,priority,category,due_date,project_id,phase_id,assigned_user_id,assigned_supervisor_id,is_archived,submitted_for_review_at,approved_at,completed_at,rejection_reason,client_visible",
     )
     .eq("is_archived", false)
     .order("due_date", { ascending: true, nullsFirst: false });

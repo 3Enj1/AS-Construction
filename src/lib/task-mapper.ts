@@ -53,6 +53,7 @@ export type DbTask = {
   completed_at: string | null;
   rejection_reason: string | null;
   client_visible?: boolean;
+  category?: string;
 };
 
 export type EnrichedTask = {
@@ -62,6 +63,7 @@ export type EnrichedTask = {
   status: TaskStatus;
   dbStatus: DbTaskStatus;
   priority: Task["priority"];
+  category: string;
   dueDate: string | null;
   projectId: string;
   projectName?: string;
@@ -103,6 +105,7 @@ export function enrichTask(
     status: overdue ? "Overdue" : TASK_STATUS_DB_TO_UI[t.status],
     dbStatus: t.status,
     priority: PRIORITY_DB_TO_UI[t.priority] ?? "Medium",
+    category: t.category ?? "general",
     dueDate: t.due_date,
     projectId: t.project_id,
     projectName: ctx.project?.project_name,

@@ -3,6 +3,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { formatDate } from "@/lib/format";
 import type { EnrichedTask } from "@/lib/task-mapper";
 import type { Task } from "@/lib/types";
+import { taskVisual } from "@/lib/task-visuals";
 import { cn } from "@/lib/utils";
 import { CalendarClock, Flag, HardHat } from "lucide-react";
 
@@ -24,6 +25,8 @@ export function TaskCard({
 }) {
   const overdue = task.status === "Overdue";
   const active = task.status === "In Progress";
+  const visual = taskVisual(task.category);
+  const CategoryIcon = visual.icon;
   return (
     <button
       onClick={onClick}
@@ -39,6 +42,16 @@ export function TaskCard({
             {task.projectCode && <span className="font-mono">{task.projectCode}</span>}
             {task.projectName && <><span>·</span><span className="truncate">{task.projectName}</span></>}
             {task.phaseName && <><span>·</span><span className="truncate">{task.phaseName}</span></>}
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider",
+                visual.tone,
+              )}
+            >
+              <CategoryIcon className="size-3" /> {visual.label}
+            </span>
           </div>
           <h3 className="mt-1 font-medium leading-snug text-foreground">{task.title}</h3>
           {!compact && task.description && (

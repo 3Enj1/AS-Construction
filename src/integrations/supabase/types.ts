@@ -652,6 +652,7 @@ export type Database = {
           archived_by: string | null
           assigned_supervisor_id: string | null
           assigned_user_id: string | null
+          category: string
           client_visible: boolean
           completed_at: string | null
           created_at: string
@@ -678,6 +679,7 @@ export type Database = {
           archived_by?: string | null
           assigned_supervisor_id?: string | null
           assigned_user_id?: string | null
+          category?: string
           client_visible?: boolean
           completed_at?: string | null
           created_at?: string
@@ -704,6 +706,7 @@ export type Database = {
           archived_by?: string | null
           assigned_supervisor_id?: string | null
           assigned_user_id?: string | null
+          category?: string
           client_visible?: boolean
           completed_at?: string | null
           created_at?: string
