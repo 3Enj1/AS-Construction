@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { AccessRestricted } from "@/components/layout/AccessRestricted";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -141,10 +142,16 @@ function useReports() {
     );
   };
 
-  return { exportProjectStatus, exportAttendanceWeekly, exportMaterialUsage, exportBudgetVsActuals };
+  return {
+    exportProjectStatus,
+    exportAttendanceWeekly,
+    exportMaterialUsage,
+    exportBudgetVsActuals,
+  };
 }
 
 function ReportsPage() {
+  const { hasRole } = useAuth();
   const {
     exportProjectStatus: exportProjects,
     exportAttendanceWeekly,
@@ -152,6 +159,15 @@ function ReportsPage() {
     exportBudgetVsActuals,
   } = useReports();
   const [exporting, setExporting] = useState<string | null>(null);
+
+  if (!hasRole("admin")) {
+    return (
+      <>
+        <PageHeader title="Reports" subtitle="Operational and financial reports." />
+        <AccessRestricted />
+      </>
+    );
+  }
 
   const REPORTS: { name: string; desc: string; tag: string; run?: () => Promise<void> }[] = [
     {

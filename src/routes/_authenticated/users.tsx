@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { AccessRestricted } from "@/components/layout/AccessRestricted";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,12 +35,21 @@ export const Route = createFileRoute("/_authenticated/users")({
 });
 
 function UsersPage() {
-  const { allUsers, refreshAllUsers } = useAuth();
+  const { allUsers, refreshAllUsers, hasRole } = useAuth();
   const [open, setOpen] = useState(false);
   const { data: onSite = new Set<string>() } = useQuery({
     queryKey: ["on-site-profile-ids"],
     queryFn: fetchOnSiteProfileIds,
   });
+
+  if (!hasRole("admin")) {
+    return (
+      <>
+        <PageHeader title="Team" subtitle="Manually created by Admin. No public sign-up." />
+        <AccessRestricted />
+      </>
+    );
+  }
 
   return (
     <>
@@ -132,7 +142,9 @@ function AddUserDialog({ onDone }: { onDone: () => void }) {
         },
       }),
     onSuccess: () => {
-      toast.success(`${fullName.trim()} added — share their employee code and password to sign in.`);
+      toast.success(
+        `${fullName.trim()} added — share their employee code and password to sign in.`,
+      );
       onDone();
     },
     onError: (e: Error) => toast.error(e.message || "Could not add user"),
@@ -210,7 +222,11 @@ function AddUserDialog({ onDone }: { onDone: () => void }) {
         </div>
       </div>
       <DialogFooter>
-        <Button disabled={!valid || create.isPending} onClick={() => create.mutate()} variant="brand">
+        <Button
+          disabled={!valid || create.isPending}
+          onClick={() => create.mutate()}
+          variant="brand"
+        >
           {create.isPending ? "Adding…" : "Add user"}
         </Button>
       </DialogFooter>

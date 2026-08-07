@@ -17,6 +17,7 @@ import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedClockRouteImport } from './routes/_authenticated/clock'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedMapRouteImport } from './routes/_authenticated/map'
 import { Route as AuthenticatedMaterialRequestsRouteImport } from './routes/_authenticated/material-requests'
 import { Route as AuthenticatedMaterialsRouteImport } from './routes/_authenticated/materials'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
@@ -68,6 +69,11 @@ const AuthenticatedClockRoute = AuthenticatedClockRouteImport.update({
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedMapRoute = AuthenticatedMapRouteImport.update({
+  id: '/map',
+  path: '/map',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedMaterialRequestsRoute =
@@ -148,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof AuthenticatedChatRoute
   '/clock': typeof AuthenticatedClockRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/map': typeof AuthenticatedMapRoute
   '/material-requests': typeof AuthenticatedMaterialRequestsRoute
   '/materials': typeof AuthenticatedMaterialsRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
@@ -170,6 +177,7 @@ export interface FileRoutesByTo {
   '/chat': typeof AuthenticatedChatRoute
   '/clock': typeof AuthenticatedClockRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/map': typeof AuthenticatedMapRoute
   '/material-requests': typeof AuthenticatedMaterialRequestsRoute
   '/materials': typeof AuthenticatedMaterialsRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/_authenticated/clock': typeof AuthenticatedClockRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/map': typeof AuthenticatedMapRoute
   '/_authenticated/material-requests': typeof AuthenticatedMaterialRequestsRoute
   '/_authenticated/materials': typeof AuthenticatedMaterialsRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
@@ -218,6 +227,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/clock'
     | '/dashboard'
+    | '/map'
     | '/material-requests'
     | '/materials'
     | '/notifications'
@@ -240,6 +250,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/clock'
     | '/dashboard'
+    | '/map'
     | '/material-requests'
     | '/materials'
     | '/notifications'
@@ -263,6 +274,7 @@ export interface FileRouteTypes {
     | '/_authenticated/chat'
     | '/_authenticated/clock'
     | '/_authenticated/dashboard'
+    | '/_authenticated/map'
     | '/_authenticated/material-requests'
     | '/_authenticated/materials'
     | '/_authenticated/notifications'
@@ -341,6 +353,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/map': {
+      id: '/_authenticated/map'
+      path: '/map'
+      fullPath: '/map'
+      preLoaderRoute: typeof AuthenticatedMapRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/material-requests': {
@@ -442,6 +461,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedClockRoute: typeof AuthenticatedClockRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedMapRoute: typeof AuthenticatedMapRoute
   AuthenticatedMaterialRequestsRoute: typeof AuthenticatedMaterialRequestsRoute
   AuthenticatedMaterialsRoute: typeof AuthenticatedMaterialsRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
@@ -462,6 +482,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedClockRoute: AuthenticatedClockRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedMapRoute: AuthenticatedMapRoute,
   AuthenticatedMaterialRequestsRoute: AuthenticatedMaterialRequestsRoute,
   AuthenticatedMaterialsRoute: AuthenticatedMaterialsRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,

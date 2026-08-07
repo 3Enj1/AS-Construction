@@ -185,19 +185,23 @@ export function AdminDashboard() {
         <TaskTrendChart data={trend} />
       </div>
 
-      {pins.length > 0 && (
-        <div className="mt-6">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              <MapPin className="size-4" /> Where we've worked
-            </h2>
-            <Link to="/map" className="text-xs text-brand hover:underline">
-              Full map →
-            </Link>
-          </div>
-          <ProjectsMap pins={pins} height={280} scrollWheelZoom={false} />
+      <div className="mt-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <MapPin className="size-4" /> Where we've worked
+          </h2>
+          <Link to="/map" className="text-xs text-brand hover:underline">
+            Full map →
+          </Link>
         </div>
-      )}
+        <ProjectsMap pins={pins} height={280} scrollWheelZoom={false} />
+        {pins.length === 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            No projects pinned yet — add a location from a project's Edit dialog and it'll show up
+            here.
+          </p>
+        )}
+      </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

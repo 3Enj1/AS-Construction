@@ -111,7 +111,7 @@ function MaterialRequests() {
               <div className="flex items-center gap-2">
                 {r.urgency === "Urgent" && <Pill tone="danger">Urgent</Pill>}
                 <StatusPill status={r.status} kind="tone" />
-                {hasRole("admin", "project_manager") && r.status === "Pending" && (
+                {hasRole("admin") && r.status === "Pending" && (
                   <>
                     <Button
                       size="sm"

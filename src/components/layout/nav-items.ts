@@ -45,7 +45,9 @@ const MGMT_NAV: NavItem[] = [
   { label: "Settings", to: "/settings", icon: Settings },
 ];
 
-const PM_NAV: NavItem[] = MGMT_NAV.filter((i) => !["Users", "Settings"].includes(i.label));
+const PM_NAV: NavItem[] = MGMT_NAV.filter(
+  (i) => !["Users", "Settings", "Reports"].includes(i.label),
+);
 
 const SUPERVISOR_NAV: NavItem[] = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
@@ -55,7 +57,6 @@ const SUPERVISOR_NAV: NavItem[] = [
   { label: "Task Approvals", to: "/approvals", icon: CheckSquare },
   { label: "Materials", to: "/materials", icon: Package },
   { label: "Material Requests", to: "/material-requests", icon: PackagePlus },
-  { label: "Reports", to: "/reports", icon: BarChart3 },
   { label: "Project Chat", to: "/chat", icon: MessageSquare },
   { label: "Notifications", to: "/notifications", icon: Bell },
 ];
