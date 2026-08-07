@@ -269,6 +269,7 @@ function NewProjectDialog({
           <LocationPicker
             latitude={latitude}
             longitude={longitude}
+            address={address}
             onChange={(lat, lng) => {
               setLatitude(lat);
               setLongitude(lng);

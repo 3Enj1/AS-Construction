@@ -686,6 +686,7 @@ function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: (
           <LocationPicker
             latitude={latitude}
             longitude={longitude}
+            address={address}
             onChange={(lat, lng) => {
               setLatitude(lat);
               setLongitude(lng);

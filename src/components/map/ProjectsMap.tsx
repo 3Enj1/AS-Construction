@@ -6,10 +6,22 @@ import type { ProjectPin } from "@/lib/project-actions";
 import {
   SOUTHERN_AFRICA_CENTER,
   SOUTHERN_AFRICA_ZOOM,
+  TILE_ATTRIBUTION,
   colorForProjectStatus,
   pinIcon,
+  tileUrlForTheme,
 } from "@/lib/map-utils";
+import { useTheme } from "@/lib/theme-context";
 import { cn } from "@/lib/utils";
+
+const STATUS_LABEL: Record<string, string> = {
+  planning: "Planning",
+  active: "Active",
+  on_hold: "On hold",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  archived: "Archived",
+};
 
 function FitToPins({ pins }: { pins: ProjectPin[] }) {
   const map = useMap();
@@ -42,12 +54,13 @@ export function ProjectsMap({
   // defer the actual map to after mount, client-side only.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const { theme } = useTheme();
 
   if (!mounted) {
     return (
       <div
         className={cn(
-          "grid place-items-center rounded-lg border border-border bg-surface-2 text-sm text-muted-foreground",
+          "as-grain grid place-items-center rounded-xl border border-border bg-surface-2 text-sm text-muted-foreground",
           className,
         )}
         style={{ height }}
@@ -59,7 +72,7 @@ export function ProjectsMap({
 
   return (
     <div
-      className={cn("overflow-hidden rounded-lg border border-border", className)}
+      className={cn("overflow-hidden rounded-xl border border-border shadow-card", className)}
       style={{ height }}
     >
       <MapContainer
@@ -68,28 +81,37 @@ export function ProjectsMap({
         scrollWheelZoom={scrollWheelZoom}
         style={{ height: "100%", width: "100%" }}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <TileLayer attribution={TILE_ATTRIBUTION} url={tileUrlForTheme(theme)} detectRetina />
         <FitToPins pins={pins} />
         {pins.map((p) => (
           <Marker
             key={p.id}
             position={[p.latitude, p.longitude]}
-            icon={pinIcon(colorForProjectStatus(p.status))}
+            icon={pinIcon(colorForProjectStatus(p.status), { pulse: p.status === "active" })}
           >
             <Popup>
-              <div className="min-w-[160px]">
+              <div className="min-w-[170px]">
                 <div className="font-semibold leading-snug">{p.name}</div>
                 {p.address && <div className="text-xs text-muted-foreground">{p.address}</div>}
-                <Link
-                  to="/projects/$id"
-                  params={{ id: p.id }}
-                  className="mt-1 inline-block text-xs text-brand hover:underline"
-                >
-                  View project →
-                </Link>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+                    style={{
+                      color: colorForProjectStatus(p.status),
+                      borderColor: colorForProjectStatus(p.status),
+                      background: `color-mix(in oklab, ${colorForProjectStatus(p.status)} 15%, transparent)`,
+                    }}
+                  >
+                    {STATUS_LABEL[p.status] ?? p.status}
+                  </span>
+                  <Link
+                    to="/projects/$id"
+                    params={{ id: p.id }}
+                    className="text-xs text-brand hover:underline"
+                  >
+                    View →
+                  </Link>
+                </div>
               </div>
             </Popup>
           </Marker>

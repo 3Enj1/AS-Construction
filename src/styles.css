@@ -319,4 +319,15 @@
   .leaflet-control-attribution a {
     color: var(--color-muted-foreground) !important;
   }
+  .as-map-pin-pulse {
+    position: absolute;
+    display: block;
+    border-radius: 9999px;
+    opacity: 0.55;
+    animation: as-map-pin-pulse 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  @keyframes as-map-pin-pulse {
+    0% { transform: scale(0.6); opacity: 0.55; }
+    75%, 100% { transform: scale(1.8); opacity: 0; }
+  }
 }
