@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ProjectCard } from "@/components/projects/ProjectCard";
+import { LocationPicker } from "@/components/map/LocationPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,7 +25,11 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import { mapDbProject, type DbProject } from "@/lib/project-mapper";
-import { attachProjectProgress, createProjectFromTemplate, fetchTemplates } from "@/lib/project-actions";
+import {
+  attachProjectProgress,
+  createProjectFromTemplate,
+  fetchTemplates,
+} from "@/lib/project-actions";
 import { templateVisual } from "@/lib/template-visuals";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -151,6 +156,8 @@ function NewProjectDialog({
   const [targetDate, setTargetDate] = useState("");
   const [budget, setBudget] = useState("");
   const [templateId, setTemplateId] = useState<string>(initialTemplateId ?? "none");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
 
   useEffect(() => {
     if (initialTemplateId) setTemplateId(initialTemplateId);
@@ -174,6 +181,8 @@ function NewProjectDialog({
         expected_completion_date: targetDate || null,
         budget: budget.trim() ? Number(budget) : null,
         template_id: templateId === "none" ? null : templateId,
+        latitude,
+        longitude,
       });
     },
     onSuccess: (res) => {
@@ -247,13 +256,27 @@ function NewProjectDialog({
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Link an existing client login so they can see this project and its client-visible
-            tasks. Leave unlinked if there's no client account yet — you can add it later.
+            Link an existing client login so they can see this project and its client-visible tasks.
+            Leave unlinked if there's no client account yet — you can add it later.
           </p>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="np-addr">Site address</Label>
           <Input id="np-addr" value={address} onChange={(e) => setAddress(e.target.value)} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label>Map location (optional)</Label>
+          <LocationPicker
+            latitude={latitude}
+            longitude={longitude}
+            onChange={(lat, lng) => {
+              setLatitude(lat);
+              setLongitude(lng);
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            Click the map to pin this project — it'll show up on the project map.
+          </p>
         </div>
         <div className="grid gap-1.5 sm:grid-cols-2 sm:gap-3">
           <div className="grid gap-1.5">

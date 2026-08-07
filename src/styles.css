@@ -289,4 +289,34 @@
     62% { opacity: 1; transform: scale(1.15); }
     75%, 100% { opacity: 0; transform: scale(1.6); }
   }
+
+  /* Leaflet ships light-mode-only chrome by default; re-skin popups/controls
+     with our theme tokens so they match in both light and dark mode. */
+  .leaflet-container {
+    background: var(--color-surface-2);
+    font-family: inherit;
+  }
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    background: var(--color-card);
+    color: var(--color-card-foreground);
+  }
+  .leaflet-popup-content-wrapper {
+    border-radius: var(--radius-md);
+  }
+  .leaflet-popup-content {
+    margin: 10px 12px;
+  }
+  .leaflet-control-zoom a {
+    background: var(--color-card) !important;
+    color: var(--color-card-foreground) !important;
+    border-color: var(--color-border) !important;
+  }
+  .leaflet-control-attribution {
+    background: color-mix(in oklab, var(--color-card) 80%, transparent) !important;
+    color: var(--color-muted-foreground) !important;
+  }
+  .leaflet-control-attribution a {
+    color: var(--color-muted-foreground) !important;
+  }
 }

@@ -1,11 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
-import { fetchNotifications, markNotificationRead } from "@/lib/project-actions";
+import {
+  dismissAllNotifications,
+  dismissNotification,
+  fetchNotifications,
+  markNotificationRead,
+} from "@/lib/project-actions";
 import { relativeFromNow } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Bell, CheckCircle2, Info } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, Info, X } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/notifications")({
   component: NotificationsPage,
@@ -43,11 +50,41 @@ function NotificationsPage() {
     },
   });
 
+  const dismiss = useMutation({
+    mutationFn: dismissNotification,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onError: (e: Error) => toast.error(e.message || "Could not clear notification"),
+  });
+
+  const dismissAll = useMutation({
+    mutationFn: () => dismissAllNotifications(list.map((n) => n.id)),
+    onSuccess: () => {
+      toast.success("Notifications cleared");
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not clear notifications"),
+  });
+
   if (!user) return null;
 
   return (
     <>
-      <PageHeader title="Notifications" subtitle="Updates from across the system." />
+      <PageHeader
+        title="Notifications"
+        subtitle="Updates from across the system."
+        actions={
+          list.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={dismissAll.isPending}
+              onClick={() => dismissAll.mutate()}
+            >
+              Clear all
+            </Button>
+          )
+        }
+      />
       {isLoading ? (
         <div className="as-card p-6 text-sm text-muted-foreground">Loading notifications…</div>
       ) : (
@@ -57,31 +94,49 @@ function NotificationsPage() {
             const isMine = n.forUserId === user.id;
             const unread = isMine && !n.read;
             return (
-              <button
+              <div
                 key={n.id}
-                type="button"
-                onClick={() => isMine && !n.read && markRead.mutate(n.id)}
                 className={cn(
-                  "as-press flex w-full gap-3 p-4 text-left",
+                  "flex w-full items-start gap-1 pr-2",
                   unread ? "bg-accent/40 hover:bg-accent/60" : "hover:bg-accent/30",
                 )}
               >
-                <div className={cn("grid size-9 shrink-0 place-items-center rounded-md", TONE[n.kind])}>
-                  <Icon className="size-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 font-medium">
-                      {n.title}
-                      {unread && <span className="size-1.5 shrink-0 rounded-full bg-brand" />}
-                    </div>
-                    <span className="whitespace-nowrap text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {relativeFromNow(n.at)}
-                    </span>
+                <button
+                  type="button"
+                  onClick={() => isMine && !n.read && markRead.mutate(n.id)}
+                  className="as-press flex flex-1 gap-3 p-4 text-left"
+                >
+                  <div
+                    className={cn(
+                      "grid size-9 shrink-0 place-items-center rounded-md",
+                      TONE[n.kind],
+                    )}
+                  >
+                    <Icon className="size-4" />
                   </div>
-                  {n.body && <div className="mt-0.5 text-sm text-muted-foreground">{n.body}</div>}
-                </div>
-              </button>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 font-medium">
+                        {n.title}
+                        {unread && <span className="size-1.5 shrink-0 rounded-full bg-brand" />}
+                      </div>
+                      <span className="whitespace-nowrap text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {relativeFromNow(n.at)}
+                      </span>
+                    </div>
+                    {n.body && <div className="mt-0.5 text-sm text-muted-foreground">{n.body}</div>}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Clear notification"
+                  disabled={dismiss.isPending}
+                  onClick={() => dismiss.mutate(n.id)}
+                  className="as-press mt-4 shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-danger/10 hover:text-danger"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
             );
           })}
           {list.length === 0 && (

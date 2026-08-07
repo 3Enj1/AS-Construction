@@ -92,6 +92,8 @@ export interface Project {
   spent: number;
   phases: Phase[];
   coverGradient: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface MaterialRequest {

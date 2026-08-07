@@ -4,10 +4,16 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/stat-card";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { TaskTrendChart } from "@/components/dashboard/TaskTrendChart";
+import { ProjectsMap } from "@/components/map/ProjectsMap";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { supabase } from "@/integrations/supabase/client";
-import { attachProjectProgress, fetchEnrichedTasks, fetchTaskCompletionTrend } from "@/lib/project-actions";
+import {
+  attachProjectProgress,
+  fetchEnrichedTasks,
+  fetchProjectPins,
+  fetchTaskCompletionTrend,
+} from "@/lib/project-actions";
 import { mapDbProject, type DbProject } from "@/lib/project-mapper";
 import { relativeFromNow } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -18,6 +24,7 @@ import {
   ClipboardCheck,
   Hammer,
   Info,
+  MapPin,
   Plus,
   Users,
 } from "lucide-react";
@@ -97,6 +104,11 @@ export function AdminDashboard() {
     queryFn: fetchTaskCompletionTrend,
   });
 
+  const { data: pins = [] } = useQuery({
+    queryKey: ["project-pins"],
+    queryFn: fetchProjectPins,
+  });
+
   const active = projects.filter((p) => p.status !== "Completed");
   const overdueTasks = tasks.filter((t) => t.status === "Overdue");
   const review = tasks.filter((t) => t.dbStatus === "submitted_for_review");
@@ -173,6 +185,20 @@ export function AdminDashboard() {
         <TaskTrendChart data={trend} />
       </div>
 
+      {pins.length > 0 && (
+        <div className="mt-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <MapPin className="size-4" /> Where we've worked
+            </h2>
+            <Link to="/map" className="text-xs text-brand hover:underline">
+              Full map →
+            </Link>
+          </div>
+          <ProjectsMap pins={pins} height={280} scrollWheelZoom={false} />
+        </div>
+      )}
+
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
@@ -240,25 +266,25 @@ export function AdminDashboard() {
                 recent.map((n) => {
                   const Icon = ACTIVITY_ICON[n.kind] ?? Info;
                   return (
-                  <div key={n.id} className="flex gap-3 p-3.5">
-                    <div
-                      className={cn(
-                        "mt-0.5 grid size-7 shrink-0 place-items-center rounded-full",
-                        ACTIVITY_TONE[n.kind] ?? ACTIVITY_TONE.info,
-                      )}
-                    >
-                      <Icon className="size-3.5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium leading-snug">{n.title}</div>
-                      {n.body && (
-                        <div className="mt-0.5 text-xs text-muted-foreground">{n.body}</div>
-                      )}
-                      <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                        {relativeFromNow(n.created_at)}
+                    <div key={n.id} className="flex gap-3 p-3.5">
+                      <div
+                        className={cn(
+                          "mt-0.5 grid size-7 shrink-0 place-items-center rounded-full",
+                          ACTIVITY_TONE[n.kind] ?? ACTIVITY_TONE.info,
+                        )}
+                      >
+                        <Icon className="size-3.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium leading-snug">{n.title}</div>
+                        {n.body && (
+                          <div className="mt-0.5 text-xs text-muted-foreground">{n.body}</div>
+                        )}
+                        <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                          {relativeFromNow(n.created_at)}
+                        </div>
                       </div>
                     </div>
-                  </div>
                   );
                 })
               )}

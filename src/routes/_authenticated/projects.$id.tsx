@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { StatCard } from "@/components/ui/stat-card";
 import { TaskCard } from "@/components/tasks/TaskCard";
 import { EditTaskDialog } from "@/components/tasks/EditTaskDialog";
+import { LocationPicker } from "@/components/map/LocationPicker";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -28,12 +29,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import {
-  codeFromProjectId,
-  enrichTask,
-  type DbTask,
-  type EnrichedTask,
-} from "@/lib/task-mapper";
+import { codeFromProjectId, enrichTask, type DbTask, type EnrichedTask } from "@/lib/task-mapper";
 import { formatDate } from "@/lib/format";
 import { imageForId } from "@/lib/stock-images";
 import { TASK_CATEGORIES, taskVisual } from "@/lib/task-visuals";
@@ -80,6 +76,8 @@ type ProjectRow = {
   assigned_project_manager_id: string | null;
   assigned_site_supervisor_id: string | null;
   budget: number | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 function ProjectDetail() {
@@ -181,53 +179,53 @@ function ProjectDetail() {
           <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
         </div>
         <div className="p-5 sm:p-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <div className="font-mono text-xs text-muted-foreground">{code}</div>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-              {project.project_name}
-            </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-              {project.site_address && (
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="size-3.5" /> {project.site_address}
-                </span>
-              )}
-              {project.expected_completion_date && (
-                <span className="inline-flex items-center gap-1">
-                  <Calendar className="size-3.5" /> Target{" "}
-                  {formatDate(project.expected_completion_date)}
-                </span>
-              )}
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="font-mono text-xs text-muted-foreground">{code}</div>
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
+                {project.project_name}
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                {project.site_address && (
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="size-3.5" /> {project.site_address}
+                  </span>
+                )}
+                {project.expected_completion_date && (
+                  <span className="inline-flex items-center gap-1">
+                    <Calendar className="size-3.5" /> Target{" "}
+                    {formatDate(project.expected_completion_date)}
+                  </span>
+                )}
+                {canManage && (
+                  <span className="inline-flex items-center gap-1">
+                    {project.client_profile_id
+                      ? "Client account linked"
+                      : "No client account linked"}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <StatusPill status={project.status} kind="tone" />
               {canManage && (
-                <span className="inline-flex items-center gap-1">
-                  {project.client_profile_id
-                    ? "Client account linked"
-                    : "No client account linked"}
-                </span>
+                <Dialog open={editProjectOpen} onOpenChange={setEditProjectOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" variant="outline">
+                      <Pencil className="size-3.5" /> Edit
+                    </Button>
+                  </DialogTrigger>
+                  <EditProjectDialog
+                    project={project}
+                    onDone={() => {
+                      setEditProjectOpen(false);
+                      invalidate();
+                    }}
+                  />
+                </Dialog>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <StatusPill status={project.status} kind="tone" />
-            {canManage && (
-              <Dialog open={editProjectOpen} onOpenChange={setEditProjectOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" variant="outline">
-                    <Pencil className="size-3.5" /> Edit
-                  </Button>
-                </DialogTrigger>
-                <EditProjectDialog
-                  project={project}
-                  onDone={() => {
-                    setEditProjectOpen(false);
-                    invalidate();
-                  }}
-                />
-              </Dialog>
-            )}
-          </div>
-        </div>
         </div>
       </div>
 
@@ -403,13 +401,7 @@ function ProjectMaterialsSection({ projectId }: { projectId: string }) {
   );
 }
 
-function ProjectBudgetSection({
-  projectId,
-  budget,
-}: {
-  projectId: string;
-  budget: number | null;
-}) {
+function ProjectBudgetSection({ projectId, budget }: { projectId: string; budget: number | null }) {
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
 
@@ -462,7 +454,12 @@ function ProjectBudgetSection({
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="Budget" value={budget != null ? money(budget) : "—"} icon={Wallet} tone="brand" />
+        <StatCard
+          label="Budget"
+          value={budget != null ? money(budget) : "—"}
+          icon={Wallet}
+          tone="brand"
+        />
         <StatCard label="Spent" value={money(spent)} icon={Wallet} tone="warning" />
         <StatCard
           label="Remaining"
@@ -542,7 +539,11 @@ function AddExpenseDialog({ projectId, onDone }: { projectId: string; onDone: ()
       <div className="grid gap-3">
         <div className="grid gap-1.5">
           <Label htmlFor="exp-desc">Description</Label>
-          <Input id="exp-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <Input
+            id="exp-desc"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
@@ -591,6 +592,8 @@ function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: (
   const [startDate, setStartDate] = useState(project.start_date ?? "");
   const [targetDate, setTargetDate] = useState(project.expected_completion_date ?? "");
   const [budget, setBudget] = useState(project.budget != null ? String(project.budget) : "");
+  const [latitude, setLatitude] = useState<number | null>(project.latitude);
+  const [longitude, setLongitude] = useState<number | null>(project.longitude);
 
   const save = useMutation({
     mutationFn: () =>
@@ -603,6 +606,8 @@ function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: (
         start_date: startDate || null,
         expected_completion_date: targetDate || null,
         budget: budget.trim() ? Number(budget) : null,
+        latitude,
+        longitude,
       }),
     onSuccess: () => {
       toast.success("Project updated");
@@ -669,13 +674,23 @@ function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: (
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Link an existing client login so they can see this project and its client-visible
-            tasks.
+            Link an existing client login so they can see this project and its client-visible tasks.
           </p>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="ep-addr">Site address</Label>
           <Input id="ep-addr" value={address} onChange={(e) => setAddress(e.target.value)} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label>Map location (optional)</Label>
+          <LocationPicker
+            latitude={latitude}
+            longitude={longitude}
+            onChange={(lat, lng) => {
+              setLatitude(lat);
+              setLongitude(lng);
+            }}
+          />
         </div>
         <div className="grid gap-1.5 sm:grid-cols-2 sm:gap-3">
           <div className="grid gap-1.5">
@@ -711,7 +726,11 @@ function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: (
         </div>
       </div>
       <DialogFooter>
-        <Button disabled={!name.trim() || save.isPending} onClick={() => save.mutate()} variant="brand">
+        <Button
+          disabled={!name.trim() || save.isPending}
+          onClick={() => save.mutate()}
+          variant="brand"
+        >
           {save.isPending ? "Saving…" : "Save changes"}
         </Button>
       </DialogFooter>
@@ -876,4 +895,3 @@ function AddTaskDialog({
     </Dialog>
   );
 }
-

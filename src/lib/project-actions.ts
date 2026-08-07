@@ -83,6 +83,8 @@ export async function createProjectFromTemplate(input: {
   expected_completion_date?: string | null;
   budget?: number | null;
   template_id?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }) {
   const { data: u } = await supabase.auth.getUser();
   const { data: me } = await supabase
@@ -103,6 +105,8 @@ export async function createProjectFromTemplate(input: {
       start_date: input.start_date ?? null,
       expected_completion_date: input.expected_completion_date ?? null,
       budget: input.budget ?? null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
       created_by: me?.id ?? null,
     })
     .select("id")
@@ -181,6 +185,8 @@ export async function updateProject(
     start_date?: string | null;
     expected_completion_date?: string | null;
     budget?: number | null;
+    latitude?: number | null;
+    longitude?: number | null;
   },
 ) {
   const { error } = await supabase
@@ -194,6 +200,8 @@ export async function updateProject(
       start_date: input.start_date ?? null,
       expected_completion_date: input.expected_completion_date ?? null,
       budget: input.budget ?? null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
     })
     .eq("id", id);
   if (error) throw error;
@@ -278,6 +286,44 @@ export async function fetchProjectsMini(): Promise<ProjectMini[]> {
     .order("project_name", { ascending: true });
   if (error) throw error;
   return (data as ProjectMini[]) ?? [];
+}
+
+export type ProjectPin = {
+  id: string;
+  name: string;
+  address: string | null;
+  status: string;
+  latitude: number;
+  longitude: number;
+};
+
+/** Every project (active or archived) that has a pin location set. */
+export async function fetchProjectPins(): Promise<ProjectPin[]> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id,project_name,site_address,status,latitude,longitude")
+    .not("latitude", "is", null)
+    .not("longitude", "is", null);
+  if (error) throw error;
+  return (
+    (data ?? []) as {
+      id: string;
+      project_name: string;
+      site_address: string | null;
+      status: string;
+      latitude: number | null;
+      longitude: number | null;
+    }[]
+  )
+    .filter((p) => p.latitude != null && p.longitude != null)
+    .map((p) => ({
+      id: p.id,
+      name: p.project_name,
+      address: p.site_address,
+      status: p.status,
+      latitude: p.latitude as number,
+      longitude: p.longitude as number,
+    }));
 }
 
 async function notify(input: {
@@ -813,7 +859,12 @@ export async function fetchChatReads(projectId: string): Promise<ChatRead[]> {
   return (data ?? []).map((r) => ({ userId: r.user_id, lastReadAt: r.last_read_at }));
 }
 
-function mapReaction(r: { id: string; message_id: string; user_id: string; emoji: string }): ChatReaction {
+function mapReaction(r: {
+  id: string;
+  message_id: string;
+  user_id: string;
+  emoji: string;
+}): ChatReaction {
   return { id: r.id, messageId: r.message_id, userId: r.user_id, emoji: r.emoji };
 }
 
@@ -833,10 +884,7 @@ export async function setChatReaction(messageId: string, emoji: string): Promise
   if (!meId) throw new Error("Not signed in");
   const { data, error } = await supabase
     .from("chat_reactions")
-    .upsert(
-      { message_id: messageId, user_id: meId, emoji },
-      { onConflict: "message_id,user_id" },
-    )
+    .upsert({ message_id: messageId, user_id: meId, emoji }, { onConflict: "message_id,user_id" })
     .select("id,message_id,user_id,emoji")
     .single();
   if (error) throw error;
@@ -1106,24 +1154,62 @@ export type DbNotification = {
   created_at: string;
 };
 
-/** Notifications visible to the current user, per RLS (own + role broadcasts). */
+/** Notifications visible to the current user, per RLS (own + role broadcasts),
+ * minus any this user has dismissed from their own list. */
 export async function fetchNotifications(): Promise<Notification[]> {
-  const { data, error } = await supabase
-    .from("notifications")
-    .select("id,for_user_id,for_role,title,body,kind,link_url,is_read,created_at")
-    .order("created_at", { ascending: false })
-    .limit(50);
+  const meId = await currentProfileId();
+  const [{ data, error }, { data: dismissed, error: dismissedError }] = await Promise.all([
+    supabase
+      .from("notifications")
+      .select("id,for_user_id,for_role,title,body,kind,link_url,is_read,created_at")
+      .order("created_at", { ascending: false })
+      .limit(50),
+    meId
+      ? supabase.from("notification_dismissals").select("notification_id").eq("profile_id", meId)
+      : Promise.resolve({ data: [] as { notification_id: string }[], error: null }),
+  ]);
   if (error) throw error;
-  return ((data ?? []) as DbNotification[]).map((n) => ({
-    id: n.id,
-    forRole: n.for_role ?? undefined,
-    forUserId: n.for_user_id ?? undefined,
-    title: n.title,
-    body: n.body ?? "",
-    at: n.created_at,
-    kind: n.kind,
-    read: n.is_read,
-  }));
+  if (dismissedError) throw dismissedError;
+  const dismissedIds = new Set((dismissed ?? []).map((d) => d.notification_id));
+  return ((data ?? []) as DbNotification[])
+    .filter((n) => !dismissedIds.has(n.id))
+    .map((n) => ({
+      id: n.id,
+      forRole: n.for_role ?? undefined,
+      forUserId: n.for_user_id ?? undefined,
+      title: n.title,
+      body: n.body ?? "",
+      at: n.created_at,
+      kind: n.kind,
+      read: n.is_read,
+    }));
+}
+
+/** Hide a notification from the current user's own list only — other
+ * recipients (role broadcasts, or admins/PMs who can see everyone's) still
+ * see it. */
+export async function dismissNotification(id: string): Promise<void> {
+  const meId = await currentProfileId();
+  if (!meId) throw new Error("Not signed in");
+  const { error } = await supabase
+    .from("notification_dismissals")
+    .upsert(
+      { profile_id: meId, notification_id: id },
+      { onConflict: "profile_id,notification_id" },
+    );
+  if (error) throw error;
+}
+
+/** Clear every notification currently visible to this user. */
+export async function dismissAllNotifications(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const meId = await currentProfileId();
+  if (!meId) throw new Error("Not signed in");
+  const { error } = await supabase.from("notification_dismissals").upsert(
+    ids.map((notification_id) => ({ profile_id: meId, notification_id })),
+    { onConflict: "profile_id,notification_id" },
+  );
+  if (error) throw error;
 }
 
 /** Unread count for the bell badge — only personal notifications are
@@ -1192,9 +1278,7 @@ export async function fetchMyUploads(): Promise<UploadPhoto[]> {
 /** Signed, time-limited URLs for private-bucket storage paths, keyed by path. */
 export async function getSignedPhotoUrls(paths: string[]): Promise<Map<string, string>> {
   if (paths.length === 0) return new Map();
-  const { data, error } = await supabase.storage
-    .from("task-photos")
-    .createSignedUrls(paths, 3600);
+  const { data, error } = await supabase.storage.from("task-photos").createSignedUrls(paths, 3600);
   if (error) throw error;
   const map = new Map<string, string>();
   for (const item of data ?? []) {
@@ -1357,7 +1441,10 @@ export async function approveTaskSuggestion(suggestion: TaskSuggestion): Promise
   });
 }
 
-export async function rejectTaskSuggestion(suggestion: TaskSuggestion, comment?: string | null): Promise<void> {
+export async function rejectTaskSuggestion(
+  suggestion: TaskSuggestion,
+  comment?: string | null,
+): Promise<void> {
   const meId = await currentProfileId();
   if (!meId) throw new Error("Not signed in");
   const { error } = await supabase
