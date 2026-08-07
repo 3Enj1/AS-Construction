@@ -4,14 +4,12 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/stat-card";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { TaskTrendChart } from "@/components/dashboard/TaskTrendChart";
-import { ProjectsMap } from "@/components/map/ProjectsMap";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { supabase } from "@/integrations/supabase/client";
 import {
   attachProjectProgress,
   fetchEnrichedTasks,
-  fetchProjectPins,
   fetchTaskCompletionTrend,
 } from "@/lib/project-actions";
 import { mapDbProject, type DbProject } from "@/lib/project-mapper";
@@ -24,8 +22,8 @@ import {
   ClipboardCheck,
   Hammer,
   Info,
-  MapPin,
   Plus,
+  TrendingUp,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -50,6 +48,14 @@ function EmptyState({ icon: Icon, message }: { icon: LucideIcon; message: string
         <Icon className="size-4" />
       </div>
       <div className="text-sm text-muted-foreground">{message}</div>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+      {children}
     </div>
   );
 }
@@ -104,11 +110,6 @@ export function AdminDashboard() {
     queryFn: fetchTaskCompletionTrend,
   });
 
-  const { data: pins = [] } = useQuery({
-    queryKey: ["project-pins"],
-    queryFn: fetchProjectPins,
-  });
-
   const active = projects.filter((p) => p.status !== "Completed");
   const overdueTasks = tasks.filter((t) => t.status === "Overdue");
   const review = tasks.filter((t) => t.dbStatus === "submitted_for_review");
@@ -142,31 +143,14 @@ export function AdminDashboard() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <SectionLabel>Portfolio</SectionLabel>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
           { label: "Active projects", value: active.length, icon: Hammer, tone: "brand" as const },
           {
-            label: "Overdue tasks",
-            value: overdueTasks.length,
-            icon: AlertTriangle,
-            tone: "danger" as const,
-          },
-          {
-            label: "Awaiting approval",
-            value: review.length,
-            icon: CheckCircle2,
-            tone: "warning" as const,
-          },
-          {
-            label: "Completed tasks",
-            value: completed.length,
-            icon: CheckCircle2,
-            tone: "info" as const,
-          },
-          {
             label: "Overall progress",
             value: `${totalProgress}%`,
-            icon: Hammer,
+            icon: TrendingUp,
             tone: "brand" as const,
           },
           { label: "Team members", value: teamCount, icon: Users, tone: "neutral" as const },
@@ -181,32 +165,49 @@ export function AdminDashboard() {
         ))}
       </div>
 
-      <div className="mt-6">
-        <TaskTrendChart data={trend} />
+      <div className="mt-5">
+        <SectionLabel>Task pipeline</SectionLabel>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {[
+            {
+              label: "Overdue tasks",
+              value: overdueTasks.length,
+              icon: AlertTriangle,
+              tone: "danger" as const,
+            },
+            {
+              label: "Awaiting approval",
+              value: review.length,
+              icon: CheckCircle2,
+              tone: "warning" as const,
+            },
+            {
+              label: "Completed tasks",
+              value: completed.length,
+              icon: CheckCircle2,
+              tone: "info" as const,
+            },
+          ].map((s, idx) => (
+            <div
+              key={s.label}
+              className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-both"
+              style={{ animationDelay: `${180 + idx * 60}ms` }}
+            >
+              <StatCard label={s.label} value={s.value} icon={s.icon} tone={s.tone} />
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="mt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            <MapPin className="size-4" /> Where we've worked
-          </h2>
-          <Link to="/map" className="text-xs text-brand hover:underline">
-            Full map →
-          </Link>
-        </div>
-        <ProjectsMap pins={pins} height={280} scrollWheelZoom={false} />
-        {pins.length === 0 && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            No projects pinned yet — add a location from a project's Edit dialog and it'll show up
-            here.
-          </p>
-        )}
+        <TaskTrendChart data={trend} />
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <Hammer className="size-4" />
               Active projects
               <span className="grid size-5 place-items-center rounded-full bg-muted text-[11px] font-semibold normal-case tracking-normal text-foreground">
                 {active.length}
@@ -237,7 +238,8 @@ export function AdminDashboard() {
 
         <div className="space-y-6">
           <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <ClipboardCheck className="size-4" />
               Tasks awaiting approval
             </h2>
             <div className="as-card divide-y divide-border">
@@ -260,7 +262,8 @@ export function AdminDashboard() {
           </section>
 
           <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <Bell className="size-4" />
               Recent activity
             </h2>
             <div className="as-card divide-y divide-border">

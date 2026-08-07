@@ -32,8 +32,6 @@ export type DbProject = {
   assigned_project_manager_id: string | null;
   assigned_site_supervisor_id: string | null;
   budget?: number | null;
-  latitude?: number | null;
-  longitude?: number | null;
 };
 
 export function mapDbProject(p: DbProject): Project {
@@ -58,7 +56,5 @@ export function mapDbProject(p: DbProject): Project {
     spent: 0,
     phases: [],
     coverGradient: gradientFromId(p.id),
-    latitude: p.latitude ?? null,
-    longitude: p.longitude ?? null,
   };
 }

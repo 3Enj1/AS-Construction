@@ -18,7 +18,6 @@ import {
   Image as ImageIcon,
   Trophy,
   FileBox,
-  MapPin,
   type LucideIcon,
 } from "lucide-react";
 
@@ -33,7 +32,6 @@ const MGMT_NAV: NavItem[] = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
   { label: "Projects", to: "/projects", icon: Hammer },
   { label: "Project Templates", to: "/templates", icon: FileBox },
-  { label: "Project Map", to: "/map", icon: MapPin },
   { label: "Tasks", to: "/tasks", icon: ClipboardList },
   { label: "Task Approvals", to: "/approvals", icon: CheckSquare },
   { label: "Materials", to: "/materials", icon: Package },
@@ -52,7 +50,6 @@ const PM_NAV: NavItem[] = MGMT_NAV.filter(
 const SUPERVISOR_NAV: NavItem[] = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
   { label: "Projects", to: "/projects", icon: Hammer },
-  { label: "Project Map", to: "/map", icon: MapPin },
   { label: "Tasks", to: "/tasks", icon: ClipboardList },
   { label: "Task Approvals", to: "/approvals", icon: CheckSquare },
   { label: "Materials", to: "/materials", icon: Package },

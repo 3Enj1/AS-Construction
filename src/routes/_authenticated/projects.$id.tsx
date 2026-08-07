@@ -6,7 +6,6 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { StatCard } from "@/components/ui/stat-card";
 import { TaskCard } from "@/components/tasks/TaskCard";
 import { EditTaskDialog } from "@/components/tasks/EditTaskDialog";
-import { LocationPicker } from "@/components/map/LocationPicker";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -76,8 +75,6 @@ type ProjectRow = {
   assigned_project_manager_id: string | null;
   assigned_site_supervisor_id: string | null;
   budget: number | null;
-  latitude: number | null;
-  longitude: number | null;
 };
 
 function ProjectDetail() {
@@ -221,7 +218,6 @@ function ProjectDetail() {
                       setEditProjectOpen(false);
                       invalidate();
                       qc.invalidateQueries({ queryKey: ["projects"] });
-                      qc.invalidateQueries({ queryKey: ["project-pins"] });
                     }}
                   />
                 </Dialog>
@@ -594,8 +590,6 @@ function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: (
   const [startDate, setStartDate] = useState(project.start_date ?? "");
   const [targetDate, setTargetDate] = useState(project.expected_completion_date ?? "");
   const [budget, setBudget] = useState(project.budget != null ? String(project.budget) : "");
-  const [latitude, setLatitude] = useState<number | null>(project.latitude);
-  const [longitude, setLongitude] = useState<number | null>(project.longitude);
 
   const save = useMutation({
     mutationFn: () =>
@@ -608,8 +602,6 @@ function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: (
         start_date: startDate || null,
         expected_completion_date: targetDate || null,
         budget: budget.trim() ? Number(budget) : null,
-        latitude,
-        longitude,
       }),
     onSuccess: () => {
       toast.success("Project updated");
@@ -682,18 +674,6 @@ function EditProjectDialog({ project, onDone }: { project: ProjectRow; onDone: (
         <div className="grid gap-1.5">
           <Label htmlFor="ep-addr">Site address</Label>
           <Input id="ep-addr" value={address} onChange={(e) => setAddress(e.target.value)} />
-        </div>
-        <div className="grid gap-1.5">
-          <Label>Map location (optional)</Label>
-          <LocationPicker
-            latitude={latitude}
-            longitude={longitude}
-            address={address}
-            onChange={(lat, lng) => {
-              setLatitude(lat);
-              setLongitude(lng);
-            }}
-          />
         </div>
         <div className="grid gap-1.5 sm:grid-cols-2 sm:gap-3">
           <div className="grid gap-1.5">

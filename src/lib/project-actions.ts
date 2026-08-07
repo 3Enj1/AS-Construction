@@ -83,8 +83,6 @@ export async function createProjectFromTemplate(input: {
   expected_completion_date?: string | null;
   budget?: number | null;
   template_id?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
 }) {
   const { data: u } = await supabase.auth.getUser();
   const { data: me } = await supabase
@@ -105,8 +103,6 @@ export async function createProjectFromTemplate(input: {
       start_date: input.start_date ?? null,
       expected_completion_date: input.expected_completion_date ?? null,
       budget: input.budget ?? null,
-      latitude: input.latitude ?? null,
-      longitude: input.longitude ?? null,
       created_by: me?.id ?? null,
     })
     .select("id")
@@ -185,8 +181,6 @@ export async function updateProject(
     start_date?: string | null;
     expected_completion_date?: string | null;
     budget?: number | null;
-    latitude?: number | null;
-    longitude?: number | null;
   },
 ) {
   const { error } = await supabase
@@ -200,8 +194,6 @@ export async function updateProject(
       start_date: input.start_date ?? null,
       expected_completion_date: input.expected_completion_date ?? null,
       budget: input.budget ?? null,
-      latitude: input.latitude ?? null,
-      longitude: input.longitude ?? null,
     })
     .eq("id", id);
   if (error) throw error;
@@ -286,44 +278,6 @@ export async function fetchProjectsMini(): Promise<ProjectMini[]> {
     .order("project_name", { ascending: true });
   if (error) throw error;
   return (data as ProjectMini[]) ?? [];
-}
-
-export type ProjectPin = {
-  id: string;
-  name: string;
-  address: string | null;
-  status: string;
-  latitude: number;
-  longitude: number;
-};
-
-/** Every project (active or archived) that has a pin location set. */
-export async function fetchProjectPins(): Promise<ProjectPin[]> {
-  const { data, error } = await supabase
-    .from("projects")
-    .select("id,project_name,site_address,status,latitude,longitude")
-    .not("latitude", "is", null)
-    .not("longitude", "is", null);
-  if (error) throw error;
-  return (
-    (data ?? []) as {
-      id: string;
-      project_name: string;
-      site_address: string | null;
-      status: string;
-      latitude: number | null;
-      longitude: number | null;
-    }[]
-  )
-    .filter((p) => p.latitude != null && p.longitude != null)
-    .map((p) => ({
-      id: p.id,
-      name: p.project_name,
-      address: p.site_address,
-      status: p.status,
-      latitude: p.latitude as number,
-      longitude: p.longitude as number,
-    }));
 }
 
 async function notify(input: {

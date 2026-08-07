@@ -5,7 +5,7 @@ import { TaskCard } from "@/components/tasks/TaskCard";
 import { TaskTrendChart } from "@/components/dashboard/TaskTrendChart";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchEnrichedTasks, fetchTaskCompletionTrend } from "@/lib/project-actions";
-import { AlertTriangle, CheckCircle2, ClipboardList, HardHat } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardList, HardHat, ListTodo } from "lucide-react";
 
 export function SupervisorDashboard() {
   const { data: tasks = [], isLoading } = useQuery({
@@ -49,7 +49,8 @@ export function SupervisorDashboard() {
       <div className="mt-6">
         <TaskTrendChart data={trend} />
       </div>
-      <h2 className="mt-8 mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+      <h2 className="mt-8 mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        <ListTodo className="size-4" />
         Today's tasks
       </h2>
       {isLoading ? (
