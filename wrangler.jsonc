@@ -7,9 +7,16 @@
   "observability": {
     "enabled": true,
   },
-  // Runtime vars/secrets are intentionally NOT set here.
-  // Non-secret vars (SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) and the
-  // SUPABASE_SERVICE_ROLE_KEY secret are configured in the Cloudflare
-  // dashboard (Settings > Variables & Secrets) or via `wrangler secret put`,
-  // never committed to source. See deployment guide for exact steps.
+  // Non-secret runtime vars, committed here (not just set in the dashboard)
+  // because this project's deploy config is regenerated fresh on every
+  // build (Nitro's deployConfig), which was silently dropping
+  // dashboard-only variables on redeploy. Safe to commit: this is the
+  // public Supabase URL and anon/publishable key, protected by RLS, not
+  // a secret. SUPABASE_SERVICE_ROLE_KEY stays out of source — set it via
+  // the Cloudflare dashboard (Settings > Variables & Secrets) as a
+  // Secret, or `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+  "vars": {
+    "SUPABASE_URL": "https://iwrwhhglagzsvvgpsuop.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_DkSg8KZzMMYPtbRaRPet3g_7lpokE_m",
+  },
 }
