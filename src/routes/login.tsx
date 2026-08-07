@@ -9,15 +9,6 @@ import { imageForId } from "@/lib/stock-images";
 import { ArrowRight, HardHat, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
-const SEEDED_ACCOUNTS = [
-  { name: "Andrew Stuart", role: "Admin", code: "ASC-ADM-001", pwd: "Andrew2026!" },
-  { name: "Sarah Mitchell", role: "Project Manager", code: "ASC-PM-001", pwd: "Password123!" },
-  { name: "James Botha", role: "Site Supervisor", code: "ASC-SS-001", pwd: "Password123!" },
-  { name: "Thabo Nkosi", role: "Worker", code: "ASC-WRK-001", pwd: "Password123!" },
-  { name: "RoofPro Subs", role: "Subcontractor", code: "ASC-SUB-001", pwd: "Password123!" },
-  { name: "Mr & Mrs Patel", role: "Client", code: "ASC-CL-001", pwd: "Password123!" },
-];
-
 export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
@@ -41,11 +32,6 @@ function LoginPage() {
     } finally {
       setBusy(false);
     }
-  };
-
-  const quickFill = (c: string, p: string) => {
-    setCode(c);
-    setPassword(p);
   };
 
   return (
@@ -156,29 +142,6 @@ function LoginPage() {
               </div>
             </form>
           </div>
-
-          <details className="mt-4 as-card p-4 text-sm">
-            <summary className="cursor-pointer text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Demo accounts (tap to fill)
-            </summary>
-            <ul className="mt-3 space-y-1.5">
-              {SEEDED_ACCOUNTS.map((u) => (
-                <li key={u.code}>
-                  <button
-                    type="button"
-                    onClick={() => quickFill(u.code, u.pwd)}
-                    className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left hover:bg-accent as-press"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{u.name}</div>
-                      <div className="text-[11px] text-muted-foreground">{u.role}</div>
-                    </div>
-                    <code className="text-[11px] font-mono text-brand">{u.code}</code>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </details>
         </div>
       </div>
     </div>
