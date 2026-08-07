@@ -102,11 +102,19 @@ export function getNavForRole(role: Role): NavItem[] {
   }
 }
 
+const ADMIN_MOBILE_NAV: NavItem[] = [
+  { label: "Home", to: "/dashboard", icon: Home },
+  { label: "Projects", to: "/projects", icon: Hammer },
+  { label: "Chat", to: "/chat", icon: MessageSquare },
+  { label: "Materials", to: "/materials", icon: Package },
+  { label: "Settings", to: "/settings", icon: Settings },
+];
+
 export function getMobileNavForRole(role: Role): NavItem[] {
+  if (role === "admin") return ADMIN_MOBILE_NAV;
   // 5-item mobile bottom nav per role.
   const full = getNavForRole(role);
-  const priority: Record<Role, string[]> = {
-    admin: ["Dashboard", "Projects", "Task Approvals", "Material Requests", "Notifications"],
+  const priority: Record<Exclude<Role, "admin">, string[]> = {
     project_manager: ["Dashboard", "Projects", "Task Approvals", "Material Requests", "Chat"],
     site_supervisor: ["Dashboard", "Tasks", "Task Approvals", "Materials", "Notifications"],
     worker: ["Home", "My Tasks", "Clock In", "Uploads", "Notifications"],
