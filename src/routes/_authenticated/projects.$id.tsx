@@ -220,6 +220,8 @@ function ProjectDetail() {
                     onDone={() => {
                       setEditProjectOpen(false);
                       invalidate();
+                      qc.invalidateQueries({ queryKey: ["projects"] });
+                      qc.invalidateQueries({ queryKey: ["project-pins"] });
                     }}
                   />
                 </Dialog>

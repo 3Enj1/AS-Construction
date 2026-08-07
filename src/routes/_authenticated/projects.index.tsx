@@ -102,6 +102,7 @@ function ProjectsList() {
                   closeDialog();
                   qc.invalidateQueries({ queryKey: ["projects"] });
                   qc.invalidateQueries({ queryKey: ["tasks"] });
+                  qc.invalidateQueries({ queryKey: ["project-pins"] });
                 }}
               />
             </Dialog>
