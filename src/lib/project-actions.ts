@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { DbPriority, DbTask } from "./task-mapper";
 import { enrichTask, type EnrichedTask } from "./task-mapper";
+import { mapProfile, type ProfileRow } from "./auth-context";
 import type {
   Material,
   MaterialRequest,
@@ -10,6 +11,7 @@ import type {
   Role,
   Project,
   Notification,
+  User,
 } from "./types";
 
 export type ProjectMini = { id: string; project_name: string };
@@ -267,6 +269,20 @@ export async function fetchTaskCompletionTrend(): Promise<{ date: string; count:
     });
   }
   return days;
+}
+
+/** Admin-only: full profile rows (email/phone/employee_code included) for the
+ * Team management page. Everywhere else in the app reads the safe
+ * `profile_directory` view via auth-context's `allUsers` instead — this is
+ * the one place that legitimately needs the PII, and RLS ("Elevated roles
+ * read all profiles") only permits admin/PM/site_supervisor to call it. */
+export async function fetchAllProfilesFull(): Promise<User[]> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return ((data as ProfileRow[]) ?? []).map(mapProfile);
 }
 
 /** Minimal list of non-archived projects, for pickers. */

@@ -70,7 +70,10 @@ function SettingsPage() {
           </div>
         </section>
 
-        <ChangePasswordSection email={user.email} />
+        {/* user is always the signed-in account's own full profile (self-read
+            RLS), so email is always populated here — unlike allUsers, which
+            only carries the safe directory subset. */}
+        <ChangePasswordSection email={user.email!} />
 
         <section>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">

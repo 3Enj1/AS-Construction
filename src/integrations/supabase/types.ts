@@ -1205,7 +1205,17 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      profile_directory: {
+        Row: {
+          id: string;
+          full_name: string;
+          role: Database["public"]["Enums"]["app_role"];
+          avatar_url: string | null;
+          is_active: boolean;
+          created_at: string;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       current_profile_id: { Args: never; Returns: string };

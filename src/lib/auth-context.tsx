@@ -49,7 +49,7 @@ function colorFromId(id: string) {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
-type ProfileRow = {
+export type ProfileRow = {
   id: string;
   auth_user_id: string;
   full_name: string;
@@ -63,7 +63,18 @@ type ProfileRow = {
   accepted_terms_at: string | null;
 };
 
-function mapProfile(p: ProfileRow): User {
+/** The broadly-readable safe subset of a profile (public.profile_directory
+ * view) — no email/phone/employee_code. Used for the app-wide "who is this
+ * person" UI (chat, assignee pickers, avatars) that never needed PII. */
+type DirectoryRow = {
+  id: string;
+  full_name: string;
+  role: Role;
+  avatar_url: string | null;
+  is_active: boolean;
+};
+
+export function mapProfile(p: ProfileRow): User {
   return {
     id: p.id,
     authUserId: p.auth_user_id,
@@ -78,6 +89,18 @@ function mapProfile(p: ProfileRow): User {
     isActive: p.is_active,
     acknowledged: p.has_accepted_terms,
     acknowledgedAt: p.accepted_terms_at ?? undefined,
+  };
+}
+
+function mapDirectoryEntry(p: DirectoryRow): User {
+  return {
+    id: p.id,
+    name: p.full_name,
+    role: p.role,
+    avatarColor: colorFromId(p.id),
+    avatarUrl: p.avatar_url,
+    jobTitle: ROLE_LABEL[p.role],
+    isActive: p.is_active,
   };
 }
 
@@ -101,14 +124,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshAllUsers = useCallback(async () => {
     const { data, error } = await supabase
-      .from("profiles")
+      .from("profile_directory")
       .select("*")
       .order("created_at", { ascending: true });
     if (error) {
       console.error("users load error", error);
       return;
     }
-    setAllUsers(((data as ProfileRow[]) ?? []).map(mapProfile));
+    setAllUsers(((data as DirectoryRow[]) ?? []).map(mapDirectoryEntry));
   }, []);
 
   const refreshProfile = useCallback(async () => {
@@ -149,20 +172,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [loadProfile, refreshAllUsers]);
 
-  const login = useCallback(async (code: string, password: string) => {
-    const { email } = await resolveEmployeeEmail({
-      data: { employeeCode: code.trim() },
-    });
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error("Invalid employee code or password");
+  const login = useCallback(
+    async (code: string, password: string) => {
+      const { email } = await resolveEmployeeEmail({
+        data: { employeeCode: code.trim() },
+      });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw new Error("Invalid employee code or password");
 
-    const { data: sess } = await supabase.auth.getUser();
-    if (!sess.user) throw new Error("Sign-in failed");
-    const u = await loadProfile(sess.user.id);
-    if (!u) throw new Error("Profile not found for this user");
-    setUser(u);
-    return u;
-  }, [loadProfile]);
+      const { data: sess } = await supabase.auth.getUser();
+      if (!sess.user) throw new Error("Sign-in failed");
+      const u = await loadProfile(sess.user.id);
+      if (!u) throw new Error("Profile not found for this user");
+      setUser(u);
+      return u;
+    },
+    [loadProfile],
+  );
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -188,10 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (u) setUser(u);
   }, [loadProfile]);
 
-  const hasRole = useCallback(
-    (...roles: Role[]) => !!user && roles.includes(user.role),
-    [user],
-  );
+  const hasRole = useCallback((...roles: Role[]) => !!user && roles.includes(user.role), [user]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

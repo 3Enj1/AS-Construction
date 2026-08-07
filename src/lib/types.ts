@@ -13,10 +13,14 @@ export const ROLE_LABEL: Record<Role, string> = {
 export interface User {
   id: string; // profile id
   authUserId?: string; // auth.users id
-  employeeCode: string;
+  /** Only populated for the signed-in user's own profile, or via an
+   * admin-only full-profile fetch — the broadly-shared directory list only
+   * exposes name/role/avatar. */
+  employeeCode?: string;
   name: string;
   role: Role;
-  email: string;
+  /** See employeeCode note above — not present on directory-sourced entries. */
+  email?: string;
   phone?: string;
   avatarColor: string;
   avatarUrl?: string | null;

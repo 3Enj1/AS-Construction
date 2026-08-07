@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
-import { fetchOnSiteProfileIds } from "@/lib/project-actions";
+import { fetchAllProfilesFull, fetchOnSiteProfileIds } from "@/lib/project-actions";
 import { createEmployee } from "@/lib/auth.functions";
 import { ROLE_LABEL, type Role } from "@/lib/types";
 import { toast } from "sonner";
@@ -35,11 +35,19 @@ export const Route = createFileRoute("/_authenticated/users")({
 });
 
 function UsersPage() {
-  const { allUsers, refreshAllUsers, hasRole } = useAuth();
+  const { refreshAllUsers, hasRole } = useAuth();
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const { data: onSite = new Set<string>() } = useQuery({
     queryKey: ["on-site-profile-ids"],
     queryFn: fetchOnSiteProfileIds,
+  });
+  // Admin-only full fetch (email/phone/employee_code) — everywhere else in the
+  // app reads the safe profile_directory view via auth-context's allUsers.
+  const { data: allUsers = [] } = useQuery({
+    queryKey: ["profiles-full"],
+    queryFn: fetchAllProfilesFull,
+    enabled: hasRole("admin"),
   });
 
   if (!hasRole("admin")) {
@@ -67,6 +75,7 @@ function UsersPage() {
               onDone={() => {
                 setOpen(false);
                 refreshAllUsers();
+                qc.invalidateQueries({ queryKey: ["profiles-full"] });
               }}
             />
           </Dialog>

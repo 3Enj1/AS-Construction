@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import {
+  fetchAllProfilesFull,
   fetchAttendanceLogs,
   fetchBudgetSummary,
   fetchMaterialRequests,
@@ -60,13 +61,14 @@ async function exportProjectStatus() {
 }
 
 function useReports() {
-  const { allUsers } = useAuth();
-
   const exportAttendanceWeekly = async () => {
-    const logs = await fetchAttendanceLogs();
-    const projects = await fetchProjectsMini();
+    const [logs, projects, users] = await Promise.all([
+      fetchAttendanceLogs(),
+      fetchProjectsMini(),
+      fetchAllProfilesFull(),
+    ]);
     const rows = logs.map((a) => {
-      const u = allUsers.find((x) => x.id === a.userId);
+      const u = users.find((x) => x.id === a.userId);
       const p = projects.find((x) => x.id === a.projectId);
       const end = a.clockOut ? new Date(a.clockOut).getTime() : Date.now();
       const hours = Math.max(

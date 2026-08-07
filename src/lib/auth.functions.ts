@@ -12,6 +12,14 @@ const employeeCodeSchema = z.object({
     .regex(/^[A-Za-z0-9_-]+$/, "Invalid employee code"),
 });
 
+/** ILIKE treats `%`/`_`/`\` as pattern wildcards — escape them so a login
+ * attempt is always matched as a literal (case-insensitive) string, never a
+ * wildcard pattern. The employee-code regex above only allows `_` through
+ * today, but this stays correct even if that validator ever changes. */
+function escapeIlikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
 export const resolveEmployeeEmail = createServerFn({
   method: "POST",
 })
@@ -21,7 +29,7 @@ export const resolveEmployeeEmail = createServerFn({
       const { data: profile, error } = await supabaseAdmin
         .from("profiles")
         .select("email, is_active, is_archived")
-        .ilike("employee_code", data.employeeCode)
+        .ilike("employee_code", escapeIlikePattern(data.employeeCode))
         .maybeSingle();
 
       if (error) {
