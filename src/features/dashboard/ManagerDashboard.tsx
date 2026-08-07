@@ -6,14 +6,17 @@ import { TaskTrendChart } from "@/components/dashboard/TaskTrendChart";
 import { ProjectsMap } from "@/components/map/ProjectsMap";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
 import {
   fetchEnrichedTasks,
   fetchProjectPins,
   fetchTaskCompletionTrend,
+  fetchUnreadChatCount,
 } from "@/lib/project-actions";
 import { CheckCircle2, ClipboardList, Hammer, MapPin, MessageSquare } from "lucide-react";
 
 export function ManagerDashboard() {
+  const { user } = useAuth();
   const { data: tasks = [] } = useQuery({
     queryKey: ["tasks", "all"],
     queryFn: () => fetchEnrichedTasks(),
@@ -37,6 +40,11 @@ export function ManagerDashboard() {
     queryKey: ["project-pins"],
     queryFn: fetchProjectPins,
   });
+  const { data: unreadChats = 0 } = useQuery({
+    queryKey: ["unread-chat-count", user?.id],
+    queryFn: () => fetchUnreadChatCount(user!.id),
+    enabled: !!user,
+  });
   const review = tasks.filter((t) => t.dbStatus === "submitted_for_review");
   const open = tasks.filter((t) => t.dbStatus !== "approved" && t.dbStatus !== "archived").length;
   return (
@@ -51,7 +59,7 @@ export function ManagerDashboard() {
           icon={CheckCircle2}
           tone="warning"
         />
-        <StatCard label="New chat" value={0} icon={MessageSquare} />
+        <StatCard label="Unread chats" value={unreadChats} icon={MessageSquare} tone="info" />
       </div>
       <div className="mt-6">
         <TaskTrendChart data={trend} />

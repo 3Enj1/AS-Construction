@@ -27,9 +27,12 @@ export function ClientDashboard() {
   const { data: latestUpdate } = useQuery({
     queryKey: ["client-latest-update"],
     queryFn: async () => {
+      const meId = await currentProfileId();
+      if (!meId) return null;
       const { data } = await supabase
         .from("notifications")
         .select("title,body,created_at")
+        .or(`for_user_id.eq.${meId},for_role.eq.client`)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

@@ -1,11 +1,16 @@
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TaskCard } from "@/components/tasks/TaskCard";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
-import { fetchEnrichedTasks } from "@/lib/project-actions";
+import {
+  clockIn,
+  clockOut,
+  fetchEnrichedTasks,
+  fetchMyOpenAttendance,
+  startBreak,
+} from "@/lib/project-actions";
 import { formatTime } from "@/lib/format";
 import {
   CheckCircle2,
@@ -20,17 +25,55 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-type ClockState = "out" | "in" | "tea" | "lunch";
-
 export function WorkerDashboard() {
   const { user } = useAuth();
-  const [clock, setClock] = useState<ClockState>("out");
-  const [since, setSince] = useState<string | null>(null);
+  const qc = useQueryClient();
 
   const { data: myTasks = [], isLoading } = useQuery({
     queryKey: ["tasks", "worker", user?.id],
     queryFn: () => fetchEnrichedTasks({ assignedToProfileId: user!.id }),
     enabled: !!user,
+  });
+
+  const { data: attendance, isLoading: attendanceLoading } = useQuery({
+    queryKey: ["my-attendance"],
+    queryFn: fetchMyOpenAttendance,
+    enabled: !!user,
+  });
+
+  const invalidateAttendance = () => qc.invalidateQueries({ queryKey: ["my-attendance"] });
+
+  const clockInMut = useMutation({
+    mutationFn: () => clockIn(null),
+    onSuccess: () => {
+      toast.success("Clocked in — have a great day");
+      invalidateAttendance();
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not clock in"),
+  });
+
+  const breakMut = useMutation({
+    mutationFn: (label: "Tea" | "Lunch") => {
+      if (!attendance) throw new Error("Not clocked in");
+      return startBreak(attendance).then(() => label);
+    },
+    onSuccess: (label) => {
+      toast.success(`${label} break started`);
+      invalidateAttendance();
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not start break"),
+  });
+
+  const clockOutMut = useMutation({
+    mutationFn: () => {
+      if (!attendance) throw new Error("Not clocked in");
+      return clockOut(attendance);
+    },
+    onSuccess: () => {
+      toast.success("Clocked out — see you tomorrow");
+      invalidateAttendance();
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not clock out"),
   });
 
   if (!user) return null;
@@ -39,11 +82,17 @@ export function WorkerDashboard() {
   const pending = myTasks.filter((t) => !["approved", "archived"].includes(t.dbStatus)).length;
   const submitted = myTasks.filter((t) => t.dbStatus === "submitted_for_review").length;
 
-  const updateClock = (s: ClockState, label: string) => {
-    setClock(s);
-    setSince(new Date().toISOString());
-    toast.success(label);
-  };
+  const clock: "out" | "in" | "break" = !attendance
+    ? "out"
+    : attendance.status === "On Break"
+      ? "break"
+      : "in";
+  const since = attendance
+    ? attendance.status === "On Break"
+      ? (attendance.breakStartedAt ?? attendance.clockIn)
+      : attendance.clockIn
+    : null;
+  const clockBusy = clockInMut.isPending || breakMut.isPending || clockOutMut.isPending;
 
   return (
     <>
@@ -83,7 +132,13 @@ export function WorkerDashboard() {
                   {clock !== "out" && <span className="pulse-dot" />}
                 </span>
                 <span className="font-semibold capitalize">
-                  {clock === "out" ? "Clocked out" : clock === "in" ? "Clocked in" : `On ${clock}`}
+                  {attendanceLoading
+                    ? "…"
+                    : clock === "out"
+                      ? "Clocked out"
+                      : clock === "in"
+                        ? "Clocked in"
+                        : "On break"}
                 </span>
               </div>
               {since && (
@@ -95,7 +150,8 @@ export function WorkerDashboard() {
                 size="lg"
                 variant="brand"
                 className="h-14 px-6 as-press"
-                onClick={() => updateClock("in", "Clocked in — have a great day")}
+                disabled={clockBusy || attendanceLoading}
+                onClick={() => clockInMut.mutate()}
               >
                 <PlayCircle className="size-5" /> Clock in
               </Button>
@@ -104,7 +160,8 @@ export function WorkerDashboard() {
                 size="lg"
                 variant="outline"
                 className="h-14 px-6 as-press border-danger/40 text-danger hover:bg-danger/10"
-                onClick={() => updateClock("out", "Clocked out — see you tomorrow")}
+                disabled={clockBusy}
+                onClick={() => clockOutMut.mutate()}
               >
                 <StopCircle className="size-5" /> Clock out
               </Button>
@@ -113,16 +170,16 @@ export function WorkerDashboard() {
           <div className="mt-4 grid grid-cols-2 gap-2">
             <Button
               variant="outline"
-              disabled={clock === "out"}
-              onClick={() => updateClock("tea", "Tea break started")}
+              disabled={clock !== "in" || clockBusy}
+              onClick={() => breakMut.mutate("Tea")}
               className="h-11 as-press"
             >
               <Coffee className="size-4" /> Tea break
             </Button>
             <Button
               variant="outline"
-              disabled={clock === "out"}
-              onClick={() => updateClock("lunch", "Lunch break started")}
+              disabled={clock !== "in" || clockBusy}
+              onClick={() => breakMut.mutate("Lunch")}
               className="h-11 as-press"
             >
               <Sandwich className="size-4" /> Lunch break

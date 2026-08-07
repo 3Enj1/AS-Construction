@@ -859,6 +859,28 @@ export async function fetchChatReads(projectId: string): Promise<ChatRead[]> {
   return (data ?? []).map((r) => ({ userId: r.user_id, lastReadAt: r.last_read_at }));
 }
 
+/** Count of other people's messages sent since this user last read each project's
+ * chat — used for a real "unread chats" dashboard stat. */
+export async function fetchUnreadChatCount(profileId: string): Promise<number> {
+  const [{ data: messages, error: msgError }, { data: reads, error: readError }] =
+    await Promise.all([
+      supabase
+        .from("chat_messages")
+        .select("project_id,created_at,sender_id")
+        .neq("sender_id", profileId)
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabase.from("chat_reads").select("project_id,last_read_at").eq("user_id", profileId),
+    ]);
+  if (msgError) throw msgError;
+  if (readError) throw readError;
+  const lastReadByProject = new Map((reads ?? []).map((r) => [r.project_id, r.last_read_at]));
+  return (messages ?? []).filter((m) => {
+    const lastRead = lastReadByProject.get(m.project_id);
+    return !lastRead || new Date(m.created_at).getTime() > new Date(lastRead).getTime();
+  }).length;
+}
+
 function mapReaction(r: {
   id: string;
   message_id: string;
