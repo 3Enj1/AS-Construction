@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { DbTask } from "./task-mapper";
+import type { DbPriority, DbTask } from "./task-mapper";
 import { enrichTask, type EnrichedTask } from "./task-mapper";
 import type {
   Material,
@@ -1235,6 +1235,153 @@ export async function uploadTaskPhoto(input: {
     await supabase.storage.from("task-photos").remove([path]);
     throw insertError;
   }
+}
+
+// ============ TASK SUGGESTIONS ============
+// Workers/subcontractors propose a task; admins/PMs approve (creates a real
+// task, unassigned to any phase yet), reject, or delete it outright.
+
+export type TaskSuggestion = {
+  id: string;
+  projectId: string;
+  projectName?: string;
+  suggestedBy: string;
+  suggestedByName?: string;
+  title: string;
+  description: string | null;
+  urgency: DbPriority | null;
+  photoUrl: string | null;
+  status: string;
+  reviewedBy: string | null;
+  reviewComment: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+};
+
+export async function fetchTaskSuggestions(): Promise<TaskSuggestion[]> {
+  const { data, error } = await supabase
+    .from("task_suggestions")
+    .select(
+      "id,project_id,suggested_by,title,description,urgency,photo_url,status,reviewed_by,review_comment,reviewed_at,created_at",
+    )
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+
+  const projectIds = Array.from(new Set(rows.map((r) => r.project_id)));
+  const profileIds = Array.from(new Set(rows.map((r) => r.suggested_by)));
+  const [{ data: projects }, { data: profiles }] = await Promise.all([
+    supabase.from("projects").select("id,project_name").in("id", projectIds),
+    supabase.from("profiles").select("id,full_name").in("id", profileIds),
+  ]);
+  const projectMap = new Map((projects ?? []).map((p) => [p.id, p.project_name]));
+  const profileMap = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
+
+  return rows.map((r) => ({
+    id: r.id,
+    projectId: r.project_id,
+    projectName: projectMap.get(r.project_id),
+    suggestedBy: r.suggested_by,
+    suggestedByName: profileMap.get(r.suggested_by),
+    title: r.title,
+    description: r.description,
+    urgency: r.urgency,
+    photoUrl: r.photo_url,
+    status: r.status,
+    reviewedBy: r.reviewed_by,
+    reviewComment: r.review_comment,
+    reviewedAt: r.reviewed_at,
+    createdAt: r.created_at,
+  }));
+}
+
+export async function createTaskSuggestion(input: {
+  projectId: string;
+  title: string;
+  description?: string | null;
+  urgency: DbPriority;
+  photo?: File | null;
+}): Promise<void> {
+  const meId = await currentProfileId();
+  if (!meId) throw new Error("Not signed in");
+
+  let photoPath: string | null = null;
+  if (input.photo) {
+    const ext = input.photo.name.includes(".") ? input.photo.name.split(".").pop() : "jpg";
+    photoPath = `${input.projectId}/${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("task-photos")
+      .upload(photoPath, input.photo, { contentType: input.photo.type || undefined });
+    if (uploadError) throw uploadError;
+  }
+
+  const { error } = await supabase.from("task_suggestions").insert({
+    project_id: input.projectId,
+    suggested_by: meId,
+    title: input.title,
+    description: input.description || null,
+    urgency: input.urgency,
+    photo_url: photoPath,
+  });
+  if (error) {
+    if (photoPath) await supabase.storage.from("task-photos").remove([photoPath]);
+    throw error;
+  }
+}
+
+export async function approveTaskSuggestion(suggestion: TaskSuggestion): Promise<void> {
+  const meId = await currentProfileId();
+  if (!meId) throw new Error("Not signed in");
+
+  const { error: taskError } = await supabase.from("tasks").insert({
+    project_id: suggestion.projectId,
+    task_title: suggestion.title,
+    description: suggestion.description,
+    priority: suggestion.urgency ?? "medium",
+    status: "not_started",
+  });
+  if (taskError) throw taskError;
+
+  const { error } = await supabase
+    .from("task_suggestions")
+    .update({ status: "approved", reviewed_by: meId, reviewed_at: new Date().toISOString() })
+    .eq("id", suggestion.id);
+  if (error) throw error;
+
+  await supabase.from("notifications").insert({
+    for_user_id: suggestion.suggestedBy,
+    kind: "success",
+    title: "Task suggestion approved",
+    body: `"${suggestion.title}" was added to the task list.`,
+  });
+}
+
+export async function rejectTaskSuggestion(suggestion: TaskSuggestion, comment?: string | null): Promise<void> {
+  const meId = await currentProfileId();
+  if (!meId) throw new Error("Not signed in");
+  const { error } = await supabase
+    .from("task_suggestions")
+    .update({
+      status: "rejected",
+      reviewed_by: meId,
+      reviewed_at: new Date().toISOString(),
+      review_comment: comment || null,
+    })
+    .eq("id", suggestion.id);
+  if (error) throw error;
+
+  await supabase.from("notifications").insert({
+    for_user_id: suggestion.suggestedBy,
+    kind: "warning",
+    title: "Task suggestion not approved",
+    body: comment || `"${suggestion.title}" was not approved.`,
+  });
+}
+
+export async function deleteTaskSuggestion(id: string): Promise<void> {
+  const { error } = await supabase.from("task_suggestions").delete().eq("id", id);
+  if (error) throw error;
 }
 
 export type ProjectExpense = {

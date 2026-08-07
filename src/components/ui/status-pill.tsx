@@ -65,6 +65,7 @@ function toneForGenericStatus(s: string): Tone {
     case "Delivered":
       return "success";
     case "Denied":
+    case "Rejected":
       return "danger";
     case "Pending":
       return "warning";

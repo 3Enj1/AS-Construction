@@ -5,6 +5,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -609,8 +610,8 @@ function ChatPage() {
                 <Paperclip className="size-4" />
               </Button>
             )}
-            <input
-              className="flex-1 h-11 rounded-md bg-surface-2 border border-border px-3 text-sm"
+            <Input
+              className="h-11 flex-1 bg-surface-2"
               placeholder={editingId ? "Edit your message…" : "Type a message..."}
               value={text}
               onChange={(e) => handleTextChange(e.target.value)}
