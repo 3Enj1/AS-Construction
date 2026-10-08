@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/stat-card";
@@ -8,6 +9,7 @@ import { fetchEnrichedTasks, fetchTaskCompletionTrend } from "@/lib/project-acti
 import { AlertTriangle, CheckCircle2, ClipboardList, HardHat, ListTodo } from "lucide-react";
 
 export function SupervisorDashboard() {
+  const navigate = useNavigate();
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["tasks", "supervisor-all"],
     queryFn: () => fetchEnrichedTasks(),
@@ -56,6 +58,7 @@ export function SupervisorDashboard() {
           icon={AlertTriangle}
           tone="danger"
           to="/tasks"
+          search={{ status: "overdue" }}
         />
         <StatCard
           label="Awaiting review"
@@ -79,7 +82,11 @@ export function SupervisorDashboard() {
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {active.map((t) => (
-            <TaskCard key={t.id} task={t} />
+            <TaskCard
+              key={t.id}
+              task={t}
+              onClick={() => navigate({ to: "/tasks", search: { task: t.id } })}
+            />
           ))}
         </div>
       )}

@@ -188,6 +188,7 @@ export function AdminDashboard() {
               icon: AlertTriangle,
               tone: "danger" as const,
               to: "/tasks",
+              search: { status: "overdue" },
             },
             {
               label: "Awaiting approval",
@@ -195,6 +196,7 @@ export function AdminDashboard() {
               icon: CheckCircle2,
               tone: "warning" as const,
               to: "/approvals",
+              search: undefined,
             },
             {
               label: "Completed tasks",
@@ -202,6 +204,7 @@ export function AdminDashboard() {
               icon: CheckCircle2,
               tone: "info" as const,
               to: "/tasks",
+              search: { status: "done" },
             },
           ].map((s, idx) => (
             <div
@@ -209,7 +212,14 @@ export function AdminDashboard() {
               className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-both"
               style={{ animationDelay: `${180 + idx * 60}ms` }}
             >
-              <StatCard label={s.label} value={s.value} icon={s.icon} tone={s.tone} to={s.to} />
+              <StatCard
+                label={s.label}
+                value={s.value}
+                icon={s.icon}
+                tone={s.tone}
+                to={s.to}
+                search={s.search}
+              />
             </div>
           ))}
         </div>

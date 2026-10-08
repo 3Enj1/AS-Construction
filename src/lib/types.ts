@@ -166,6 +166,8 @@ export interface Notification {
   at: string;
   kind: "info" | "warning" | "success" | "danger";
   read?: boolean;
+  /** In-app path to open when the notification is tapped (may include ?query). */
+  linkUrl?: string;
 }
 
 export interface ProjectTemplate {

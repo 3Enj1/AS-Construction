@@ -1176,6 +1176,7 @@ export async function fetchNotifications(): Promise<Notification[]> {
       at: n.created_at,
       kind: n.kind,
       read: n.is_read,
+      linkUrl: n.link_url ?? undefined,
     }));
 }
 
@@ -1553,6 +1554,11 @@ export async function fetchBudgetSummary(): Promise<ProjectBudgetSummary[]> {
   }));
 }
 
+/** In-app link that opens one task's popup on the Tasks page. */
+export function taskLink(taskId: string): string {
+  return `/tasks?task=${taskId}`;
+}
+
 /** Approve a task that was submitted for review, and notify its assignee. */
 export async function approveTask(task: EnrichedTask): Promise<void> {
   const meId = await currentProfileId();
@@ -1568,6 +1574,7 @@ export async function approveTask(task: EnrichedTask): Promise<void> {
       body: `"${task.title}" was approved.`,
       kind: "success",
       for_user_id: task.assignedUserId,
+      link_url: taskLink(task.id),
     });
   }
 }
@@ -1585,6 +1592,7 @@ export async function rejectTask(task: EnrichedTask, reason: string): Promise<vo
       body: reason || `"${task.title}" was rejected.`,
       kind: "warning",
       for_user_id: task.assignedUserId,
+      link_url: taskLink(task.id),
     });
   }
 }

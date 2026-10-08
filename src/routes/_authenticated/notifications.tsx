@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import {
 } from "@/lib/project-actions";
 import { relativeFromNow } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Bell, CheckCircle2, Info, X } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, ChevronRight, Info, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/notifications")({
@@ -35,6 +35,7 @@ const TONE = {
 function NotificationsPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: list = [], isLoading } = useQuery({
     queryKey: ["notifications", user?.id],
@@ -103,7 +104,10 @@ function NotificationsPage() {
               >
                 <button
                   type="button"
-                  onClick={() => isMine && !n.read && markRead.mutate(n.id)}
+                  onClick={() => {
+                    if (isMine && !n.read) markRead.mutate(n.id);
+                    if (n.linkUrl) navigate({ href: n.linkUrl });
+                  }}
                   className="as-press flex flex-1 gap-3 p-4 text-left"
                 >
                   <div
@@ -126,6 +130,9 @@ function NotificationsPage() {
                     </div>
                     {n.body && <div className="mt-0.5 text-sm text-muted-foreground">{n.body}</div>}
                   </div>
+                  {n.linkUrl && (
+                    <ChevronRight className="mt-2 size-4 shrink-0 text-muted-foreground" />
+                  )}
                 </button>
                 <button
                   type="button"

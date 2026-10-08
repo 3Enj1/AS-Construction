@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TaskCard } from "@/components/tasks/TaskCard";
 import { EditTaskDialog } from "@/components/tasks/EditTaskDialog";
@@ -28,30 +28,84 @@ import { createTaskSuggestion, fetchEnrichedTasks, fetchProjectsMini } from "@/l
 import type { DbPriority } from "@/lib/task-mapper";
 import type { EnrichedTask } from "@/lib/task-mapper";
 import type { TaskStatus } from "@/lib/types";
-import { Camera, Plus, X } from "lucide-react";
+import { Camera, Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
-const FILTERS: { label: string; match: (s: TaskStatus) => boolean }[] = [
-  { label: "All", match: () => true },
-  { label: "Active", match: (s) => ["In Progress", "Assigned", "Not Started"].includes(s) },
-  { label: "Overdue", match: (s) => s === "Overdue" },
-  { label: "Awaiting review", match: (s) => s === "Submitted for Review" },
-  { label: "Blocked", match: (s) => ["Blocked", "Awaiting Materials"].includes(s) },
-  { label: "Done", match: (s) => s === "Approved" },
-];
+const FILTERS = [
+  { key: "all", label: "All", match: () => true },
+  {
+    key: "review",
+    label: "Awaiting review",
+    match: (s: TaskStatus) => s === "Submitted for Review",
+  },
+  { key: "overdue", label: "Overdue", match: (s: TaskStatus) => s === "Overdue" },
+  {
+    key: "active",
+    label: "Active",
+    match: (s: TaskStatus) => ["In Progress", "Assigned", "Not Started"].includes(s),
+  },
+  {
+    key: "blocked",
+    label: "Blocked",
+    match: (s: TaskStatus) => ["Blocked", "Awaiting Materials"].includes(s),
+  },
+  { key: "done", label: "Done", match: (s: TaskStatus) => s === "Approved" },
+] as const;
+type FilterKey = (typeof FILTERS)[number]["key"];
+
+// Most urgent first: waiting on a reviewer, then overdue, blocked, in-flight, done last.
+const STATUS_RANK: Partial<Record<TaskStatus, number>> = {
+  "Submitted for Review": 0,
+  Overdue: 1,
+  Blocked: 2,
+  "Awaiting Materials": 2,
+  Rejected: 3,
+  "In Progress": 4,
+  Assigned: 5,
+  "Not Started": 6,
+  Approved: 9,
+};
+function compareTasks(a: EnrichedTask, b: EnrichedTask): number {
+  const r = (STATUS_RANK[a.status] ?? 7) - (STATUS_RANK[b.status] ?? 7);
+  if (r !== 0) return r;
+  // then soonest due date, undated last
+  if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+  return a.dueDate ? -1 : b.dueDate ? 1 : 0;
+}
+
+type TasksSearch = { task?: string; status?: FilterKey };
 
 export const Route = createFileRoute("/_authenticated/tasks")({
   component: TasksPage,
+  // ?task=<id> opens that task straight away (links from notifications and
+  // dashboards); ?status=<filter> preselects a status filter.
+  validateSearch: (search: Record<string, unknown>): TasksSearch => ({
+    task: typeof search.task === "string" ? search.task : undefined,
+    status: FILTERS.some((f) => f.key === search.status) ? (search.status as FilterKey) : undefined,
+  }),
 });
 
 function TasksPage() {
   const { user, allUsers, hasRole } = useAuth();
   const qc = useQueryClient();
-  const [filter, setFilter] = useState("All");
+  const [query, setQuery] = useState("");
+  const [projectFilter, setProjectFilter] = useState("all");
+  const [personFilter, setPersonFilter] = useState("all");
   const [editTask, setEditTask] = useState<EnrichedTask | null>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const isWorkerLike = user?.role === "worker" || user?.role === "subcontractor";
   const canManage = hasRole("admin", "project_manager", "site_supervisor");
+  const { task: taskFromSearch, status: statusFromSearch } = Route.useSearch();
+  const filter: FilterKey = statusFromSearch ?? "all";
+  const navigate = useNavigate();
+  // Status filter lives in the URL so dashboard cards can link straight to it.
+  const setFilter = (key: FilterKey) =>
+    navigate({
+      to: "/tasks",
+      search: (prev) => ({ ...prev, status: key === "all" ? undefined : key }),
+      replace: true,
+      resetScroll: false,
+    });
 
   const {
     data: tasks = [],
@@ -63,9 +117,56 @@ function TasksPage() {
     enabled: !!user,
   });
 
+  // Deep link: once tasks are loaded, open the linked task and drop the param
+  // so closing the popup (or refreshing) doesn't reopen it.
+  const handledLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!taskFromSearch || isLoading || handledLinkRef.current === taskFromSearch) return;
+    handledLinkRef.current = taskFromSearch;
+    const found = tasks.find((t) => t.id === taskFromSearch);
+    if (found) setEditTask(found);
+    else toast.error("That task is no longer available.");
+    navigate({
+      to: "/tasks",
+      search: (prev) => ({ ...prev, task: undefined }),
+      replace: true,
+      resetScroll: false,
+    });
+  }, [taskFromSearch, isLoading, tasks, navigate]);
+
+  // Picker options come from the tasks themselves, so only relevant ones show.
+  const projectOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of tasks) if (t.projectId) m.set(t.projectId, t.projectName ?? "Untitled project");
+    return [...m].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [tasks]);
+  const personOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of tasks) {
+      const a = t.assignees[0];
+      if (t.assignedUserId && a) m.set(t.assignedUserId, a.name);
+    }
+    return [...m].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [tasks]);
+
   if (!user) return null;
-  const active = FILTERS.find((f) => f.label === filter) ?? FILTERS[0];
-  const list: EnrichedTask[] = tasks.filter((t) => active.match(t.status));
+
+  // Project / person / search narrow the pool; the status chips (with counts)
+  // then pick from that pool.
+  const q = query.trim().toLowerCase();
+  const pool = tasks.filter(
+    (t) =>
+      (projectFilter === "all" || t.projectId === projectFilter) &&
+      (personFilter === "all" ||
+        (personFilter === "unassigned" ? !t.assignedUserId : t.assignedUserId === personFilter)) &&
+      (!q ||
+        [t.title, t.projectName, t.phaseName, t.assignees[0]?.name]
+          .filter(Boolean)
+          .some((v) => v!.toLowerCase().includes(q))),
+  );
+  const activeFilter = FILTERS.find((f) => f.key === filter) ?? FILTERS[0];
+  const list: EnrichedTask[] = pool.filter((t) => activeFilter.match(t.status)).sort(compareTasks);
+  const extraFilters = projectFilter !== "all" || personFilter !== "all" || !!q;
 
   return (
     <>
@@ -73,27 +174,105 @@ function TasksPage() {
         title={isWorkerLike ? "My tasks" : "Tasks"}
         subtitle={`${list.length} of ${tasks.length} tasks`}
         actions={
-          <Dialog open={suggestOpen} onOpenChange={setSuggestOpen}>
-            <DialogTrigger asChild>
-              <Button variant="brand">
-                <Plus className="size-4" /> Add new task
-              </Button>
-            </DialogTrigger>
-            <SuggestTaskDialog onDone={() => setSuggestOpen(false)} />
-          </Dialog>
+          // Workers/subcontractors only work on tasks they're given — they can't add any.
+          !isWorkerLike && (
+            <Dialog open={suggestOpen} onOpenChange={setSuggestOpen}>
+              <DialogTrigger asChild>
+                <Button variant="brand">
+                  <Plus className="size-4" /> Add new task
+                </Button>
+              </DialogTrigger>
+              <SuggestTaskDialog onDone={() => setSuggestOpen(false)} />
+            </Dialog>
+          )
         }
       />
-      <div className="mb-4 flex flex-wrap gap-2 overflow-x-auto">
-        {FILTERS.map((f) => (
+      <div className="mb-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search tasks, projects, people…"
+            className="h-10 pl-9"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:contents">
+          {projectOptions.length > 1 && (
+            <Select value={projectFilter} onValueChange={setProjectFilter}>
+              <SelectTrigger className="h-10 sm:w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All projects</SelectItem>
+                {projectOptions.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {!isWorkerLike && (
+            <Select value={personFilter} onValueChange={setPersonFilter}>
+              <SelectTrigger className="h-10 sm:w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Everyone</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {personOptions.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {FILTERS.map((f) => {
+          const count =
+            f.key === "all" ? pool.length : pool.filter((t) => f.match(t.status)).length;
+          const selected = filter === f.key;
+          return (
+            <Button
+              key={f.key}
+              variant={selected ? "brand" : "outline"}
+              size="sm"
+              onClick={() => setFilter(f.key)}
+            >
+              {f.label}
+              <span
+                className={
+                  "rounded-full px-1.5 text-[10px] font-semibold " +
+                  (selected
+                    ? "bg-brand-foreground/25"
+                    : f.key === "review" && count > 0
+                      ? "bg-warning text-warning-foreground"
+                      : "bg-muted text-muted-foreground")
+                }
+              >
+                {count}
+              </span>
+            </Button>
+          );
+        })}
+        {extraFilters && (
           <Button
-            key={f.label}
-            variant={filter === f.label ? "brand" : "outline"}
             size="sm"
-            onClick={() => setFilter(f.label)}
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={() => {
+              setQuery("");
+              setProjectFilter("all");
+              setPersonFilter("all");
+            }}
           >
-            {f.label}
+            <X className="size-3.5" /> Clear filters
           </Button>
-        ))}
+        )}
       </div>
       {isLoading ? (
         <div className="as-card p-6 text-sm text-muted-foreground">Loading tasks…</div>

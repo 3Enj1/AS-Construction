@@ -23,7 +23,13 @@ import type { TablesUpdate } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { PRIORITY_UI_TO_DB, type EnrichedTask } from "@/lib/task-mapper";
 import { TASK_CATEGORIES, taskVisual } from "@/lib/task-visuals";
-import { fetchMaterials, getSignedPhotoUrls, logMaterialUsage, uploadTaskPhoto } from "@/lib/project-actions";
+import {
+  fetchMaterials,
+  getSignedPhotoUrls,
+  logMaterialUsage,
+  taskLink,
+  uploadTaskPhoto,
+} from "@/lib/project-actions";
 import { useAuth } from "@/lib/auth-context";
 import { TaskDiarySection } from "@/components/tasks/TaskDiary";
 import { RemoveTaskDialog } from "@/components/tasks/RemoveTaskDialog";
@@ -105,7 +111,7 @@ export function EditTaskDialog({
           kind: "info",
           title: "New task assigned",
           body: `You have been assigned: ${title}`,
-          link_url: `/tasks`,
+          link_url: taskLink(task.id),
         });
       }
     },
@@ -202,7 +208,7 @@ export function EditTaskDialog({
             kind: "info",
             title: "Task submitted for review",
             body: `${task.title}`,
-            link_url: "/approvals",
+            link_url: `/projects/${task.projectId}?tab=approvals`,
           })),
         );
       } else {
@@ -211,7 +217,7 @@ export function EditTaskDialog({
           kind: "info",
           title: "Task submitted for review",
           body: `${task.title}`,
-          link_url: "/approvals",
+          link_url: `/projects/${task.projectId}?tab=approvals`,
         });
       }
     },
@@ -409,7 +415,11 @@ export function EditTaskDialog({
               {photo ? (
                 <div className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-2 text-sm">
                   <span className="truncate">{photo.name}</span>
-                  <button type="button" onClick={() => setPhoto(null)} className="text-muted-foreground hover:text-foreground">
+                  <button
+                    type="button"
+                    onClick={() => setPhoto(null)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
                     <X className="size-4" />
                   </button>
                 </div>

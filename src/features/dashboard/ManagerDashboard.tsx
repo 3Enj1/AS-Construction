@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/stat-card";
 import { TaskCard } from "@/components/tasks/TaskCard";
@@ -13,6 +14,7 @@ import {
 import { CheckCircle2, ClipboardCheck, ClipboardList, Hammer, MessageSquare } from "lucide-react";
 
 export function ManagerDashboard() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { data: tasks = [] } = useQuery({
     queryKey: ["tasks", "all"],
@@ -76,7 +78,11 @@ export function ManagerDashboard() {
       </h2>
       <div className="grid gap-3 md:grid-cols-2">
         {review.map((t) => (
-          <TaskCard key={t.id} task={t} />
+          <TaskCard
+            key={t.id}
+            task={t}
+            onClick={() => navigate({ to: "/tasks", search: { task: t.id } })}
+          />
         ))}
         {review.length === 0 && (
           <div className="as-card p-6 text-sm text-muted-foreground">Nothing waiting.</div>

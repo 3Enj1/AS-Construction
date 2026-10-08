@@ -10,6 +10,7 @@ export function StatCard({
   tone = "neutral",
   className,
   to,
+  search,
 }: {
   label: string;
   value: React.ReactNode;
@@ -19,6 +20,8 @@ export function StatCard({
   className?: string;
   /** Make the whole card a tappable link to this page. */
   to?: string;
+  /** Query params for `to`, e.g. { status: "overdue" }. */
+  search?: Record<string, string>;
 }) {
   const toneClass = {
     neutral: "text-muted-foreground bg-muted",
@@ -62,6 +65,7 @@ export function StatCard({
     return (
       <Link
         to={to}
+        search={search}
         className={cn(
           "as-card as-card-loop as-press group block p-4 hover:border-brand/40 sm:p-5",
           className,

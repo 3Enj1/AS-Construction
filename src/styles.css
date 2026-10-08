@@ -244,8 +244,25 @@
   .as-press {
     transition: transform 120ms ease, box-shadow 120ms ease, background-color 150ms ease;
   }
+  .as-press {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
   .as-press:active {
     transform: scale(0.98);
+  }
+  /* Touch screens: a finger landing on a card or row to scroll fires :active,
+     so the shrink made lists wobble while swiping. On touch nothing moves —
+     pressed items just dim slightly instead. */
+  @media (hover: none) {
+    .as-press,
+    .as-press:active {
+      transform: none;
+      transition: opacity 120ms ease, background-color 150ms ease;
+    }
+    .as-press:active {
+      opacity: 0.85;
+    }
   }
   .pulse-dot::before {
     content: "";
@@ -347,14 +364,18 @@
     pointer-events: none;
     transition: opacity 200ms ease;
   }
-  .as-card-loop:hover::after {
-    opacity: 1;
-    animation: as-loop-spin 2.2s linear infinite;
+  /* Only on devices that really hover — on phones a tap leaves ":hover"
+     stuck on the card, so the loop kept running after you'd moved on. */
+  @media (hover: hover) {
+    .as-card-loop:hover::after {
+      opacity: 1;
+      animation: as-loop-spin 2.2s linear infinite;
+    }
   }
   @keyframes as-loop-spin {
     to { --as-loop-angle: 360deg; }
   }
-  @media (prefers-reduced-motion: reduce) {
+  @media (hover: hover) and (prefers-reduced-motion: reduce) {
     .as-card-loop:hover::after {
       animation: none;
       background: var(--brand);

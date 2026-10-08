@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TaskCard } from "@/components/tasks/TaskCard";
@@ -30,6 +30,7 @@ const STAT_TILE =
   "as-card as-card-loop as-press block p-3 text-center hover:border-brand/40 active:border-brand";
 
 export function WorkerDashboard() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const qc = useQueryClient();
 
@@ -254,7 +255,11 @@ export function WorkerDashboard() {
           </div>
         )}
         {myTasks.map((t) => (
-          <TaskCard key={t.id} task={t} />
+          <TaskCard
+            key={t.id}
+            task={t}
+            onClick={() => navigate({ to: "/tasks", search: { task: t.id } })}
+          />
         ))}
       </div>
 
