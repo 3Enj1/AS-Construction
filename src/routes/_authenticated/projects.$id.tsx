@@ -1,11 +1,35 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatusPill } from "@/components/ui/status-pill";
 import { StatCard } from "@/components/ui/stat-card";
-import { TaskCard } from "@/components/tasks/TaskCard";
 import { EditTaskDialog } from "@/components/tasks/EditTaskDialog";
+import { RemoveTaskDialog, RemovedTasksDialog } from "@/components/tasks/RemoveTaskDialog";
+import {
+  DailyDiaryDialog,
+  ProjectDiary,
+  isDiaryReminderSnoozed,
+  useDiaryMissingToday,
+} from "@/components/tasks/TaskDiary";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ProjectChatPanel } from "@/components/chat/ProjectChatPanel";
+import { RaiseRequestDialog } from "@/components/materials/RaiseRequestDialog";
+import { Pill } from "@/components/ui/status-pill";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TabCarousel, type TabCarouselItem } from "@/components/ui/tab-carousel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -29,34 +53,56 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { codeFromProjectId, enrichTask, type DbTask, type EnrichedTask } from "@/lib/task-mapper";
-import { formatDate } from "@/lib/format";
+import { formatDate, relativeFromNow } from "@/lib/format";
 import { imageForId } from "@/lib/stock-images";
 import { TASK_CATEGORIES, taskVisual } from "@/lib/task-visuals";
+import { cn } from "@/lib/utils";
 import {
   addProjectExpense,
+  approveTask,
   deleteProjectExpense,
+  fetchMaterialRequests,
   fetchMaterialTransactionsForProject,
   fetchProjectExpenses,
+  rejectTask,
+  reviewMaterialRequest,
   updateProject,
 } from "@/lib/project-actions";
+import type { MaterialRequest } from "@/lib/types";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  BookOpen,
   Calendar,
+  CalendarClock,
+  ChevronDown,
   CheckCircle2,
+  CheckSquare,
   ClipboardList,
+  LayoutGrid,
   Layers,
+  ListPlus,
   MapPin,
+  MessageSquare,
   Package,
   Pencil,
   Plus,
+  RotateCcw,
   Trash2,
   TrendingUp,
   Wallet,
+  XCircle,
 } from "lucide-react";
+
+const PROJECT_TABS = ["overview", "chat", "diary", "approvals", "materials", "budget"] as const;
+type ProjectTab = (typeof PROJECT_TABS)[number];
+type ProjectSearch = { tab?: ProjectTab };
 
 export const Route = createFileRoute("/_authenticated/projects/$id")({
   component: ProjectDetail,
+  validateSearch: (search: Record<string, unknown>): ProjectSearch => ({
+    tab: PROJECT_TABS.includes(search.tab as ProjectTab) ? (search.tab as ProjectTab) : undefined,
+  }),
   notFoundComponent: () => <div className="text-muted-foreground">Project not found.</div>,
 });
 
@@ -79,9 +125,12 @@ type ProjectRow = {
 
 function ProjectDetail() {
   const { id } = Route.useParams();
+  const { tab: tabFromSearch } = Route.useSearch();
+  const navigate = useNavigate();
   const { user, hasRole, allUsers } = useAuth();
   const qc = useQueryClient();
   const canManage = hasRole("admin", "project_manager", "site_supervisor");
+  const isClient = hasRole("client");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["project", id],
@@ -140,7 +189,23 @@ function ProjectDetail() {
   const [addPhaseOpen, setAddPhaseOpen] = useState(false);
   const [editProjectOpen, setEditProjectOpen] = useState(false);
   const [editTask, setEditTask] = useState<EnrichedTask | null>(null);
-  const [addTaskPhase, setAddTaskPhase] = useState<Phase | null>(null);
+  const [removeTask, setRemoveTask] = useState<EnrichedTask | null>(null);
+  const [removedListOpen, setRemovedListOpen] = useState(false);
+  // null = closed; otherwise the phase to preselect ("" = no phase).
+  const [addTaskPhaseId, setAddTaskPhaseId] = useState<string | null>(null);
+  const [diaryOpen, setDiaryOpen] = useState(false);
+  const [diaryIsReminder, setDiaryIsReminder] = useState(false);
+
+  // Daily diary reminder: on an active project, pop the diary up once per
+  // visit if nobody has sent today's entry yet (unless snoozed for today).
+  const diaryMissing = useDiaryMissingToday(id, !isClient && data?.project.status === "active");
+  const reminderShownRef = useRef(false);
+  useEffect(() => {
+    if (!diaryMissing || reminderShownRef.current || isDiaryReminderSnoozed(id)) return;
+    reminderShownRef.current = true;
+    setDiaryIsReminder(true);
+    setDiaryOpen(true);
+  }, [diaryMissing, id]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["project", id] });
@@ -156,6 +221,39 @@ function ProjectDetail() {
   const totalTasks = tasks.length;
   const approved = tasks.filter((t) => t.dbStatus === "approved").length;
   const overallProgress = totalTasks ? Math.round((approved / totalTasks) * 100) : 0;
+  const pendingApproval = tasks.filter((t) => t.dbStatus === "submitted_for_review");
+  // Fall back to Overview if the URL names a tab this role can't see.
+  const allowedTabs: ProjectTab[] = [
+    "overview",
+    "chat",
+    ...(!isClient ? (["diary", "materials"] as const) : []),
+    ...(canManage ? (["approvals", "budget"] as const) : []),
+  ];
+  const tab: ProjectTab =
+    tabFromSearch && allowedTabs.includes(tabFromSearch) ? tabFromSearch : "overview";
+  const tabItems: (TabCarouselItem & { value: ProjectTab })[] = [
+    { value: "overview" as const, label: "Overview", icon: LayoutGrid },
+    { value: "chat" as const, label: "Chat", icon: MessageSquare },
+    { value: "diary" as const, label: "Diary", icon: BookOpen },
+    {
+      value: "approvals" as const,
+      label: "Approvals",
+      icon: CheckSquare,
+      badge: pendingApproval.length,
+    },
+    { value: "materials" as const, label: "Materials", icon: Package },
+    { value: "budget" as const, label: "Budget", icon: Wallet },
+  ].filter((t) => allowedTabs.includes(t.value));
+  const changeTab = (v: string) =>
+    navigate({
+      to: "/projects/$id",
+      params: { id },
+      search: { tab: v === "overview" ? undefined : (v as ProjectTab) },
+      replace: true,
+      // Switching tabs isn't a new page: don't jump to the top. The router's
+      // scroll reset also cancelled the tab carousel's slide mid-animation.
+      resetScroll: false,
+    });
 
   return (
     <>
@@ -203,8 +301,26 @@ function ProjectDetail() {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <StatusPill status={project.status} kind="tone" />
+              {!isClient && (
+                <Button
+                  size="sm"
+                  variant="brand"
+                  onClick={() => {
+                    setDiaryIsReminder(false);
+                    setDiaryOpen(true);
+                  }}
+                >
+                  <BookOpen className="size-3.5" /> Daily diary
+                  {diaryMissing && (
+                    <span
+                      className="size-2 rounded-full bg-warning"
+                      aria-label="Today's diary not sent yet"
+                    />
+                  )}
+                </Button>
+              )}
               {canManage && (
                 <Dialog open={editProjectOpen} onOpenChange={setEditProjectOpen}>
                   <DialogTrigger asChild>
@@ -227,104 +343,135 @@ function ProjectDetail() {
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Progress" value={`${overallProgress}%`} icon={TrendingUp} tone="brand" />
-        <StatCard label="Phases" value={phases.length} icon={Layers} tone="neutral" />
-        <StatCard
-          label="Tasks"
-          value={totalTasks}
-          hint={`${tasks.filter((t) => t.status === "Overdue").length} overdue`}
-          icon={ClipboardList}
-          tone="info"
-        />
-        <StatCard label="Approved" value={approved} icon={CheckCircle2} tone="success" />
-      </div>
-
-      <div className="mt-6 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Phases & tasks
-        </h2>
-        {canManage && (
-          <Dialog open={addPhaseOpen} onOpenChange={setAddPhaseOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline">
-                <Plus className="size-4" /> Add phase
-              </Button>
-            </DialogTrigger>
-            <AddPhaseDialog
-              projectId={project.id}
-              nextOrder={phases.length}
-              onDone={() => {
-                setAddPhaseOpen(false);
-                invalidate();
-              }}
-            />
-          </Dialog>
-        )}
-      </div>
-
-      {phases.length === 0 ? (
-        <div className="mt-4 as-card p-6 text-sm text-muted-foreground">No phases yet.</div>
-      ) : (
-        <div className="mt-4 space-y-6">
-          {phases.map((ph) => {
-            const phTasks = tasks.filter((t) => t.phaseId === ph.id);
-            const phApproved = phTasks.filter((t) => t.dbStatus === "approved").length;
-            const phPct = phTasks.length ? Math.round((phApproved / phTasks.length) * 100) : 0;
+      <Tabs value={tab} onValueChange={changeTab} className="mt-4">
+        {/* Phones: swipeable carousel. Larger screens: the normal tab bar. */}
+        <TabCarousel items={tabItems} value={tab} onValueChange={changeTab} className="sm:hidden" />
+        <TabsList className="hidden h-10 w-max sm:inline-flex">
+          {tabItems.map((t) => {
+            const Icon = t.icon;
             return (
-              <div key={ph.id}>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold">
-                      {ph.sort_order + 1}. {ph.phase_name}
-                    </h3>
-                    <div className="mt-1 flex items-center gap-2">
-                      <div className="h-1.5 w-full max-w-48 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-brand shadow-glow-brand transition-all"
-                          style={{ width: `${phPct}%` }}
-                        />
-                      </div>
-                      <span className="whitespace-nowrap text-xs text-muted-foreground">
-                        {phApproved}/{phTasks.length} approved · {phPct}%
-                      </span>
-                    </div>
-                  </div>
-                  {canManage && (
-                    <Button size="sm" variant="outline" onClick={() => setAddTaskPhase(ph)}>
-                      <Plus className="size-4" /> Add task
-                    </Button>
-                  )}
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {phTasks.map((t) => (
-                    <TaskCard key={t.id} task={t} onClick={() => setEditTask(t)} />
-                  ))}
-                  {phTasks.length === 0 && (
-                    <div className="as-card p-4 text-sm text-muted-foreground">
-                      No tasks in this phase yet.
-                    </div>
-                  )}
-                </div>
-              </div>
+              <TabsTrigger key={t.value} value={t.value} className="group gap-1.5">
+                <Icon className="size-4" /> {t.label}
+                {!!t.badge && (
+                  <span className="rounded-full bg-brand px-1.5 text-[10px] font-semibold text-brand-foreground group-data-[state=active]:bg-brand-foreground group-data-[state=active]:text-brand">
+                    {t.badge}
+                  </span>
+                )}
+              </TabsTrigger>
             );
           })}
-        </div>
+        </TabsList>
+
+        <TabsContent value="overview" className="mt-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard
+              label="Progress"
+              value={`${overallProgress}%`}
+              icon={TrendingUp}
+              tone="brand"
+            />
+            <StatCard label="Phases" value={phases.length} icon={Layers} tone="neutral" />
+            <StatCard
+              label="Tasks"
+              value={totalTasks}
+              hint={`${tasks.filter((t) => t.status === "Overdue").length} overdue`}
+              icon={ClipboardList}
+              tone="info"
+            />
+            <StatCard label="Approved" value={approved} icon={CheckCircle2} tone="success" />
+          </div>
+
+          <PhasesAndTasks
+            phases={phases}
+            tasks={tasks}
+            canManage={canManage}
+            onOpenTask={setEditTask}
+            onRemoveTask={setRemoveTask}
+            onShowRemoved={() => setRemovedListOpen(true)}
+            onAddPhase={() => setAddPhaseOpen(true)}
+            onAddTask={(phaseId) => setAddTaskPhaseId(phaseId ?? "")}
+          />
+        </TabsContent>
+
+        <TabsContent value="chat" className="mt-4">
+          <ProjectChatPanel projectId={project.id} className="h-[70dvh] sm:h-[600px]" />
+        </TabsContent>
+
+        {!isClient && (
+          <TabsContent value="diary" className="mt-4">
+            <ProjectDiary
+              projectId={project.id}
+              taskTitles={new Map(tasks.map((t) => [t.id, t.title]))}
+            />
+          </TabsContent>
+        )}
+
+        {canManage && (
+          <TabsContent value="approvals" className="mt-4">
+            <ProjectApprovals tasks={pendingApproval} onChanged={invalidate} />
+          </TabsContent>
+        )}
+
+        {!isClient && (
+          <TabsContent value="materials" className="mt-4">
+            <ProjectMaterialRequests projectId={project.id} />
+            <ProjectMaterialsSection projectId={project.id} />
+          </TabsContent>
+        )}
+
+        {canManage && (
+          <TabsContent value="budget" className="mt-4">
+            <ProjectBudgetSection projectId={project.id} budget={project.budget} />
+          </TabsContent>
+        )}
+      </Tabs>
+
+      {canManage && (
+        <Dialog open={addPhaseOpen} onOpenChange={setAddPhaseOpen}>
+          <AddPhaseDialog
+            projectId={project.id}
+            nextOrder={phases.length}
+            onDone={() => {
+              setAddPhaseOpen(false);
+              invalidate();
+            }}
+          />
+        </Dialog>
       )}
-
-      <ProjectMaterialsSection projectId={project.id} />
-
-      {canManage && <ProjectBudgetSection projectId={project.id} budget={project.budget} />}
-
-      {addTaskPhase && (
+      {canManage && (
+        <RemovedTasksDialog
+          projectId={project.id}
+          open={removedListOpen}
+          onOpenChange={setRemovedListOpen}
+          onRestored={invalidate}
+        />
+      )}
+      <RemoveTaskDialog
+        task={removeTask}
+        open={!!removeTask}
+        onOpenChange={(o) => !o && setRemoveTask(null)}
+        onRemoved={invalidate}
+      />
+      {addTaskPhaseId !== null && (
         <AddTaskDialog
           projectId={project.id}
-          phase={addTaskPhase}
-          onClose={() => setAddTaskPhase(null)}
+          phases={phases}
+          defaultPhaseId={addTaskPhaseId || null}
+          onClose={() => setAddTaskPhaseId(null)}
           onDone={() => {
-            setAddTaskPhase(null);
+            setAddTaskPhaseId(null);
             invalidate();
           }}
+        />
+      )}
+      {!isClient && (
+        <DailyDiaryDialog
+          open={diaryOpen}
+          onOpenChange={setDiaryOpen}
+          projectId={project.id}
+          projectName={project.project_name}
+          tasks={tasks.map((t) => ({ id: t.id, title: t.title }))}
+          reminder={diaryIsReminder}
         />
       )}
       {editTask && (
@@ -342,6 +489,408 @@ function ProjectDetail() {
         />
       )}
     </>
+  );
+}
+
+/** Phases as collapsed rows (tap to open), tasks as slim lines, and a single
+ * "Add" menu — phases are optional, so tasks without one get their own group. */
+function PhasesAndTasks({
+  phases,
+  tasks,
+  canManage,
+  onOpenTask,
+  onRemoveTask,
+  onShowRemoved,
+  onAddPhase,
+  onAddTask,
+}: {
+  phases: Phase[];
+  tasks: EnrichedTask[];
+  canManage: boolean;
+  onOpenTask: (t: EnrichedTask) => void;
+  onRemoveTask: (t: EnrichedTask) => void;
+  onShowRemoved: () => void;
+  onAddPhase: () => void;
+  onAddTask: (phaseId: string | null) => void;
+}) {
+  const phaseIds = new Set(phases.map((p) => p.id));
+  const unphased = tasks.filter((t) => !t.phaseId || !phaseIds.has(t.phaseId));
+  const groups = [
+    ...phases.map((ph, i) => ({
+      key: ph.id,
+      phaseId: ph.id as string | null,
+      label: `${i + 1}. ${ph.phase_name}`,
+      tasks: tasks.filter((t) => t.phaseId === ph.id),
+    })),
+    ...(unphased.length > 0
+      ? [{ key: "no-phase", phaseId: null, label: "No phase", tasks: unphased }]
+      : []),
+  ];
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Phases & tasks
+        </h2>
+        {canManage && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline">
+                <Plus className="size-4" /> Add <ChevronDown className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => onAddTask(null)}>
+                <ClipboardList className="size-4" /> New task
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onAddPhase}>
+                <Layers className="size-4" /> New phase
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+
+      {groups.length === 0 ? (
+        <div className="mt-3 as-card p-4 text-sm text-muted-foreground">
+          No phases or tasks yet{canManage ? " — use Add to create one." : "."}
+        </div>
+      ) : (
+        <Accordion type="multiple" className="mt-3 as-card divide-y divide-border px-3 sm:px-4">
+          {groups.map((g) => {
+            const done = g.tasks.filter((t) => t.dbStatus === "approved").length;
+            const pct = g.tasks.length ? Math.round((done / g.tasks.length) * 100) : 0;
+            return (
+              <AccordionItem key={g.key} value={g.key} className="border-b-0">
+                <AccordionTrigger className="gap-3 py-3 hover:no-underline">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{g.label}</div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <div className="h-1 w-full max-w-32 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-brand transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="whitespace-nowrap text-[11px] font-normal text-muted-foreground">
+                        {done}/{g.tasks.length} done
+                      </span>
+                    </div>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pb-3">
+                  <div className="divide-y divide-border rounded-md border border-border">
+                    {g.tasks.map((t) => (
+                      <TaskRow
+                        key={t.id}
+                        task={t}
+                        onClick={() => onOpenTask(t)}
+                        onRemove={canManage ? () => onRemoveTask(t) : undefined}
+                      />
+                    ))}
+                    {g.tasks.length === 0 && (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">No tasks yet.</div>
+                    )}
+                  </div>
+                  {canManage && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="mt-1 h-8 text-xs text-muted-foreground"
+                      onClick={() => onAddTask(g.phaseId)}
+                    >
+                      <ListPlus className="size-3.5" /> Add task here
+                    </Button>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+      )}
+      {canManage && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="mt-1 h-8 text-xs text-muted-foreground"
+          onClick={onShowRemoved}
+        >
+          <RotateCcw className="size-3.5" /> Removed tasks
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function TaskRow({
+  task,
+  onClick,
+  onRemove,
+}: {
+  task: EnrichedTask;
+  onClick: () => void;
+  onRemove?: () => void;
+}) {
+  const visual = taskVisual(task.category);
+  const CategoryIcon = visual.icon;
+  const assignee = task.assignees[0];
+  return (
+    <div className={cn("flex items-center", task.status === "Overdue" && "bg-danger/5")}>
+      <button
+        onClick={onClick}
+        className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-left hover:bg-accent as-press"
+      >
+        <span className={cn("grid size-6 shrink-0 place-items-center rounded-full", visual.tone)}>
+          <CategoryIcon className="size-3.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm">{task.title}</div>
+          {(task.dueDate || assignee) && (
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              {task.dueDate && (
+                <span className="inline-flex items-center gap-1">
+                  <CalendarClock className="size-3" /> {formatDate(task.dueDate)}
+                </span>
+              )}
+              {assignee && <span className="truncate">{assignee.name.split(" ")[0]}</span>}
+            </div>
+          )}
+        </div>
+        <StatusPill status={task.status} kind="task" className="shrink-0" />
+      </button>
+      {onRemove && (
+        <Button
+          size="icon"
+          variant="ghost"
+          className="mr-1 size-8 shrink-0 text-muted-foreground hover:text-danger"
+          onClick={onRemove}
+          aria-label={`Remove ${task.title}`}
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function ProjectApprovals({ tasks, onChanged }: { tasks: EnrichedTask[]; onChanged: () => void }) {
+  const [rejecting, setRejecting] = useState<EnrichedTask | null>(null);
+  const [reason, setReason] = useState("");
+
+  const approve = useMutation({
+    mutationFn: (t: EnrichedTask) => approveTask(t),
+    onSuccess: () => {
+      toast.success("Task approved");
+      onChanged();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const reject = useMutation({
+    mutationFn: ({ t, reason }: { t: EnrichedTask; reason: string }) => rejectTask(t, reason),
+    onSuccess: () => {
+      toast.success("Task sent back for rework");
+      setRejecting(null);
+      setReason("");
+      onChanged();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (tasks.length === 0)
+    return (
+      <div className="as-card p-6 text-sm text-muted-foreground">
+        Nothing in this project is waiting for approval.
+      </div>
+    );
+
+  return (
+    <>
+      <div className="as-card divide-y divide-border">
+        {tasks.map((t) => {
+          const submitter = t.assignees[0];
+          return (
+            <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div className="min-w-0 flex-1">
+                <div className="font-medium">{t.title}</div>
+                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  {submitter && <UserAvatar user={submitter} size={20} />}
+                  {submitter ? (
+                    <>
+                      Submitted by <span className="text-foreground">{submitter.name}</span>
+                    </>
+                  ) : (
+                    "Submitted for review"
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-danger/40 text-danger hover:bg-danger/10"
+                  onClick={() => setRejecting(t)}
+                  disabled={reject.isPending}
+                >
+                  <XCircle className="size-4" /> Reject
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-success text-success-foreground hover:bg-success/90"
+                  onClick={() => approve.mutate(t)}
+                  disabled={approve.isPending}
+                >
+                  <CheckCircle2 className="size-4" /> Approve
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <Dialog
+        open={!!rejecting}
+        onOpenChange={(o) => {
+          if (!o) {
+            setRejecting(null);
+            setReason("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject task</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{rejecting?.title}</p>
+          <Textarea
+            rows={4}
+            placeholder="Reason for rejection (required)…"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <DialogFooter>
+            <Button
+              className="bg-danger text-danger-foreground hover:bg-danger/90"
+              disabled={!reason.trim() || reject.isPending}
+              onClick={() => rejecting && reject.mutate({ t: rejecting, reason: reason.trim() })}
+            >
+              {reject.isPending ? "Sending…" : "Send for rework"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function ProjectMaterialRequests({ projectId }: { projectId: string }) {
+  const { hasRole } = useAuth();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const {
+    data: requests = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["material-requests", projectId],
+    queryFn: () => fetchMaterialRequests(projectId),
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["material-requests"] });
+    qc.invalidateQueries({ queryKey: ["materials"] });
+    qc.invalidateQueries({ queryKey: ["material-transactions", projectId] });
+  };
+
+  const review = useMutation({
+    mutationFn: (input: { request: MaterialRequest; decision: "approved" | "denied" }) =>
+      reviewMaterialRequest(input.request, input.decision),
+    onSuccess: (_data, vars) => {
+      toast.success(vars.decision === "approved" ? "Request approved" : "Request denied");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not update request"),
+  });
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Material requests
+        </h2>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline">
+              <Plus className="size-4" /> Raise request
+            </Button>
+          </DialogTrigger>
+          <RaiseRequestDialog
+            projectId={projectId}
+            onCreated={() => {
+              setOpen(false);
+              invalidate();
+            }}
+          />
+        </Dialog>
+      </div>
+      {isLoading ? (
+        <div className="mt-3 as-card p-6 text-sm text-muted-foreground">Loading requests…</div>
+      ) : isError ? (
+        <div className="mt-3 as-card p-6 text-sm text-danger">
+          Couldn't load requests: {error instanceof Error ? error.message : "Unknown error"}
+        </div>
+      ) : requests.length === 0 ? (
+        <div className="mt-3 as-card p-6 text-sm text-muted-foreground">
+          No material requests for this project yet.
+        </div>
+      ) : (
+        <div className="mt-3 as-card divide-y divide-border">
+          {requests.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 p-3.5">
+              <div className="min-w-0">
+                <div className="text-sm font-medium">
+                  {r.material}{" "}
+                  <span className="font-normal text-muted-foreground">
+                    · {r.quantity} {r.unit}
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Raised {relativeFromNow(r.createdAt)} by {r.requestedByName ?? "someone"}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {r.urgency === "Urgent" && <Pill tone="danger">Urgent</Pill>}
+                <StatusPill status={r.status} kind="tone" />
+                {hasRole("admin") && r.status === "Pending" && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-danger/40 text-danger hover:bg-danger/10"
+                      disabled={review.isPending}
+                      onClick={() => review.mutate({ request: r, decision: "denied" })}
+                    >
+                      Deny
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-success text-success-foreground hover:bg-success/90"
+                      disabled={review.isPending}
+                      onClick={() => review.mutate({ request: r, decision: "approved" })}
+                    >
+                      Approve
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -767,15 +1316,18 @@ function AddPhaseDialog({
 
 function AddTaskDialog({
   projectId,
-  phase,
+  phases,
+  defaultPhaseId,
   onClose,
   onDone,
 }: {
   projectId: string;
-  phase: Phase;
+  phases: Phase[];
+  defaultPhaseId: string | null;
   onClose: () => void;
   onDone: () => void;
 }) {
+  const [phaseId, setPhaseId] = useState(defaultPhaseId ?? "none");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("general");
@@ -786,7 +1338,7 @@ function AddTaskDialog({
     mutationFn: async () => {
       const { error } = await supabase.from("tasks").insert({
         project_id: projectId,
-        phase_id: phase.id,
+        phase_id: phaseId === "none" ? null : phaseId,
         task_title: title.trim(),
         description: description || null,
         category,
@@ -807,12 +1359,28 @@ function AddTaskDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New task in {phase.phase_name}</DialogTitle>
+          <DialogTitle>New task</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
             <Label>Title</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Phase (optional)</Label>
+            <Select value={phaseId} onValueChange={setPhaseId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No phase</SelectItem>
+                {phases.map((ph) => (
+                  <SelectItem key={ph.id} value={ph.id}>
+                    {ph.phase_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-1.5">
             <Label>Description</Label>

@@ -90,7 +90,7 @@ function TemplatesPage() {
             return (
               <div
                 key={tpl.id}
-                className="as-card animate-in fade-in slide-in-from-bottom-2 overflow-hidden duration-500 fill-mode-both"
+                className="as-card as-card-loop animate-in fade-in slide-in-from-bottom-2 overflow-hidden duration-500 fill-mode-both"
                 style={{ animationDelay: `${idx * 70}ms` }}
               >
                 <div className="dark relative h-36 w-full" style={{ background: visual.gradient }}>

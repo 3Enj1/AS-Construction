@@ -9,7 +9,7 @@ export function ProjectCard({ project }: { project: Project }) {
     <Link
       to="/projects/$id"
       params={{ id: project.id }}
-      className="as-card dark as-press group relative block h-72 overflow-hidden transition-shadow hover:border-brand/50 hover:shadow-glow-brand"
+      className="as-card as-card-loop dark as-press group relative block h-72 overflow-hidden transition-shadow hover:border-brand/50 hover:shadow-glow-brand"
     >
       <img
         src={imageForId(project.id)}

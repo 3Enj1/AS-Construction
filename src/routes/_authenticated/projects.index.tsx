@@ -120,9 +120,11 @@ function ProjectsList() {
         <div className="as-card p-6 text-sm text-muted-foreground">Loading projects…</div>
       ) : filtered.length === 0 ? (
         <div className="as-card p-6 text-sm text-muted-foreground">
-          {projects.length === 0
-            ? 'No projects yet. Click "New project" to create one.'
-            : "No projects match your search."}
+          {projects.length > 0
+            ? "No projects match your search."
+            : hasRole("admin", "project_manager")
+              ? 'No projects yet. Click "New project" to create one.'
+              : "No projects yet. Projects show up here once you're assigned a task on one."}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

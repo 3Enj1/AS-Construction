@@ -31,7 +31,7 @@ export function TaskCard({
     <button
       onClick={onClick}
       className={cn(
-        "as-card as-press group block w-full text-left p-4 hover:border-brand/40",
+        "as-card as-card-loop as-press group block w-full text-left p-4 hover:border-brand/40",
         active && "border-brand/40 shadow-glow-brand",
         overdue && "border-danger/40",
       )}

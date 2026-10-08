@@ -24,8 +24,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { PRIORITY_UI_TO_DB, type EnrichedTask } from "@/lib/task-mapper";
 import { TASK_CATEGORIES, taskVisual } from "@/lib/task-visuals";
 import { fetchMaterials, getSignedPhotoUrls, logMaterialUsage, uploadTaskPhoto } from "@/lib/project-actions";
+import { useAuth } from "@/lib/auth-context";
+import { TaskDiarySection } from "@/components/tasks/TaskDiary";
+import { RemoveTaskDialog } from "@/components/tasks/RemoveTaskDialog";
 import { toast } from "sonner";
-import { Camera, ImageIcon, X } from "lucide-react";
+import { Camera, ImageIcon, Trash2, X } from "lucide-react";
 
 export function EditTaskDialog({
   task,
@@ -45,6 +48,7 @@ export function EditTaskDialog({
   onDone: () => void;
 }) {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
   const [category, setCategory] = useState(task.category);
@@ -55,6 +59,7 @@ export function EditTaskDialog({
   const [supervisorId, setSupervisorId] = useState(task.supervisorId ?? "unassigned");
   const [clientVisible, setClientVisible] = useState(task.clientVisible);
   const [note, setNote] = useState("");
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [photo, setPhoto] = useState<File | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -499,6 +504,15 @@ export function EditTaskDialog({
             </div>
           )}
 
+          {/* Internal site record — clients can't read it (RLS), so don't show an empty shell. */}
+          {user?.role !== "client" && (
+            <TaskDiarySection
+              taskId={task.id}
+              projectId={task.projectId}
+              canWrite={canManage || isOwner || task.supervisorId === user?.id}
+            />
+          )}
+
           <div className="border-t border-border pt-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               History
@@ -525,22 +539,9 @@ export function EditTaskDialog({
             <Button
               variant="outline"
               className="border-danger/40 text-danger hover:bg-danger/10"
-              onClick={async () => {
-                const { error } = await supabase
-                  .from("tasks")
-                  .update({
-                    is_archived: true,
-                    archived_at: new Date().toISOString(),
-                  })
-                  .eq("id", task.id);
-                if (error) toast.error(error.message);
-                else {
-                  toast.success("Task archived");
-                  onDone();
-                }
-              }}
+              onClick={() => setConfirmRemove(true)}
             >
-              Archive
+              <Trash2 className="size-4" /> Remove task
             </Button>
           )}
           <Button onClick={() => save.mutate()} disabled={save.isPending} variant="brand">
@@ -548,6 +549,12 @@ export function EditTaskDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <RemoveTaskDialog
+        task={task}
+        open={confirmRemove}
+        onOpenChange={setConfirmRemove}
+        onRemoved={onDone}
+      />
     </Dialog>
   );
 }

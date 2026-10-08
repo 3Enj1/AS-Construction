@@ -15,11 +15,13 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  approveTask,
   approveTaskSuggestion,
   deleteTaskSuggestion,
   fetchEnrichedTasks,
   fetchTaskSuggestions,
   getSignedPhotoUrls,
+  rejectTask,
   rejectTaskSuggestion,
   type TaskSuggestion,
 } from "@/lib/project-actions";
@@ -38,7 +40,7 @@ function capitalize(s: string): string {
 
 function ApprovalsPage() {
   const qc = useQueryClient();
-  const { user, hasRole } = useAuth();
+  const { hasRole } = useAuth();
   const isAdmin = hasRole("admin");
   const [rejecting, setRejecting] = useState<EnrichedTask | null>(null);
   const [reason, setReason] = useState("");
@@ -77,27 +79,7 @@ function ApprovalsPage() {
   });
 
   const approve = useMutation({
-    mutationFn: async (t: EnrichedTask) => {
-      const now = new Date().toISOString();
-      const { error } = await supabase
-        .from("tasks")
-        .update({
-          status: "approved",
-          approved_by: user?.id ?? null,
-          approved_at: now,
-          completed_at: now,
-        })
-        .eq("id", t.id);
-      if (error) throw error;
-      if (t.assignedUserId) {
-        await supabase.from("notifications").insert({
-          title: "Task approved",
-          body: `"${t.title}" was approved.`,
-          kind: "success",
-          for_user_id: t.assignedUserId,
-        });
-      }
-    },
+    mutationFn: (t: EnrichedTask) => approveTask(t),
     onSuccess: () => {
       toast.success("Task approved");
       qc.invalidateQueries({ queryKey: ["tasks"] });
@@ -106,21 +88,7 @@ function ApprovalsPage() {
   });
 
   const reject = useMutation({
-    mutationFn: async ({ t, reason }: { t: EnrichedTask; reason: string }) => {
-      const { error } = await supabase
-        .from("tasks")
-        .update({ status: "rejected", rejection_reason: reason })
-        .eq("id", t.id);
-      if (error) throw error;
-      if (t.assignedUserId) {
-        await supabase.from("notifications").insert({
-          title: "Task needs rework",
-          body: reason || `"${t.title}" was rejected.`,
-          kind: "warning",
-          for_user_id: t.assignedUserId,
-        });
-      }
-    },
+    mutationFn: ({ t, reason }: { t: EnrichedTask; reason: string }) => rejectTask(t, reason),
     onSuccess: () => {
       toast.success("Task sent back for rework");
       setRejecting(null);

@@ -26,6 +26,8 @@ export interface NavItem {
   to: string;
   icon: LucideIcon;
   badge?: string;
+  /** Label for the narrow mobile bottom bar (defaults to `label`). */
+  short?: string;
 }
 
 const MGMT_NAV: NavItem[] = [
@@ -33,12 +35,12 @@ const MGMT_NAV: NavItem[] = [
   { label: "Projects", to: "/projects", icon: Hammer },
   { label: "Project Templates", to: "/templates", icon: FileBox },
   { label: "Tasks", to: "/tasks", icon: ClipboardList },
-  { label: "Task Approvals", to: "/approvals", icon: CheckSquare },
+  { label: "Task Approvals", to: "/approvals", icon: CheckSquare, short: "Approvals" },
   { label: "Materials", to: "/materials", icon: Package },
-  { label: "Material Requests", to: "/material-requests", icon: PackagePlus },
+  { label: "Material Requests", to: "/material-requests", icon: PackagePlus, short: "Requests" },
   { label: "Reports", to: "/reports", icon: BarChart3 },
   { label: "Users", to: "/users", icon: Users },
-  { label: "Project Chat", to: "/chat", icon: MessageSquare },
+  { label: "Project Chat", to: "/chat", icon: MessageSquare, short: "Chat" },
   { label: "Notifications", to: "/notifications", icon: Bell },
   { label: "Settings", to: "/settings", icon: Settings },
 ];
@@ -51,35 +53,37 @@ const SUPERVISOR_NAV: NavItem[] = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
   { label: "Projects", to: "/projects", icon: Hammer },
   { label: "Tasks", to: "/tasks", icon: ClipboardList },
-  { label: "Task Approvals", to: "/approvals", icon: CheckSquare },
+  { label: "Task Approvals", to: "/approvals", icon: CheckSquare, short: "Approvals" },
   { label: "Materials", to: "/materials", icon: Package },
-  { label: "Material Requests", to: "/material-requests", icon: PackagePlus },
-  { label: "Project Chat", to: "/chat", icon: MessageSquare },
+  { label: "Material Requests", to: "/material-requests", icon: PackagePlus, short: "Requests" },
+  { label: "Project Chat", to: "/chat", icon: MessageSquare, short: "Chat" },
   { label: "Notifications", to: "/notifications", icon: Bell },
 ];
 
+// Workers only see projects they have a task on (RLS: is_project_member).
 const WORKER_NAV: NavItem[] = [
   { label: "Home", to: "/dashboard", icon: Home },
-  { label: "My Tasks", to: "/tasks", icon: ClipboardList },
+  { label: "My Tasks", to: "/tasks", icon: ClipboardList, short: "Tasks" },
+  { label: "My Projects", to: "/projects", icon: Hammer, short: "Projects" },
   { label: "Clock In", to: "/clock", icon: Clock },
   { label: "Uploads", to: "/uploads", icon: ImageIcon },
   { label: "Chat", to: "/chat", icon: MessageSquare },
   { label: "Notifications", to: "/notifications", icon: Bell },
-  { label: "My Performance", to: "/performance", icon: Trophy },
+  { label: "My Performance", to: "/performance", icon: Trophy, short: "Stats" },
   { label: "Profile", to: "/profile", icon: UserIcon },
 ];
 
 const SUB_NAV: NavItem[] = [
-  { label: "Assigned Work", to: "/tasks", icon: Briefcase },
+  { label: "Assigned Work", to: "/tasks", icon: Briefcase, short: "Work" },
   { label: "Uploads", to: "/uploads", icon: ImageIcon },
-  { label: "Project Chat", to: "/chat", icon: MessageSquare },
+  { label: "Project Chat", to: "/chat", icon: MessageSquare, short: "Chat" },
   { label: "Notifications", to: "/notifications", icon: Bell },
   { label: "Profile", to: "/profile", icon: UserIcon },
 ];
 
 const CLIENT_NAV: NavItem[] = [
-  { label: "Project Overview", to: "/dashboard", icon: LayoutDashboard },
-  { label: "Approved Updates", to: "/notifications", icon: Bell },
+  { label: "Project Overview", to: "/dashboard", icon: LayoutDashboard, short: "Overview" },
+  { label: "Approved Updates", to: "/notifications", icon: Bell, short: "Updates" },
   { label: "Photos", to: "/uploads", icon: ImageIcon },
   { label: "Profile", to: "/profile", icon: UserIcon },
 ];
@@ -116,7 +120,7 @@ export function getMobileNavForRole(role: Role): NavItem[] {
   const priority: Record<Exclude<Role, "admin">, string[]> = {
     project_manager: ["Dashboard", "Projects", "Task Approvals", "Material Requests", "Chat"],
     site_supervisor: ["Dashboard", "Tasks", "Task Approvals", "Materials", "Notifications"],
-    worker: ["Home", "My Tasks", "Clock In", "Uploads", "Notifications"],
+    worker: ["Home", "My Tasks", "My Projects", "Clock In", "Notifications"],
     subcontractor: ["Assigned Work", "Uploads", "Project Chat", "Notifications", "Profile"],
     client: ["Project Overview", "Approved Updates", "Photos", "Profile"],
   };

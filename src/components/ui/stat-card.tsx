@@ -1,5 +1,6 @@
+import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import type { LucideIcon } from "lucide-react";
+import { ChevronRight, type LucideIcon } from "lucide-react";
 
 export function StatCard({
   label,
@@ -8,6 +9,7 @@ export function StatCard({
   icon: Icon,
   tone = "neutral",
   className,
+  to,
 }: {
   label: string;
   value: React.ReactNode;
@@ -15,6 +17,8 @@ export function StatCard({
   icon?: LucideIcon;
   tone?: "neutral" | "brand" | "success" | "warning" | "danger" | "info";
   className?: string;
+  /** Make the whole card a tappable link to this page. */
+  to?: string;
 }) {
   const toneClass = {
     neutral: "text-muted-foreground bg-muted",
@@ -24,12 +28,15 @@ export function StatCard({
     danger: "text-danger bg-danger/15",
     info: "text-info bg-info/15",
   }[tone];
-  return (
-    <div className={cn("as-card p-4 sm:p-5", className)}>
+  const body = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             {label}
+            {to && (
+              <ChevronRight className="size-3.5 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:text-brand" />
+            )}
           </div>
           <div className="mt-1.5 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             {value}
@@ -48,6 +55,21 @@ export function StatCard({
           </div>
         )}
       </div>
-    </div>
+    </>
   );
+
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className={cn(
+          "as-card as-card-loop as-press group block p-4 hover:border-brand/40 sm:p-5",
+          className,
+        )}
+      >
+        {body}
+      </Link>
+    );
+  }
+  return <div className={cn("as-card as-card-loop p-4 sm:p-5", className)}>{body}</div>;
 }

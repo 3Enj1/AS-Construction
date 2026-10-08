@@ -162,7 +162,7 @@ function UploadsPage() {
             return (
               <div
                 key={u.id}
-                className="as-card overflow-hidden hover:border-brand/40 hover:shadow-glow-brand"
+                className="as-card as-card-loop overflow-hidden hover:border-brand/40 hover:shadow-glow-brand"
               >
                 <div className="grid aspect-square place-items-center overflow-hidden bg-surface-2">
                   {src ? (

@@ -280,13 +280,91 @@
     68% { transform: translateY(0) scaleX(1); }
     100% { transform: translateY(0) scaleX(1); }
   }
-  .site-loader-spark {
+  /* Little red rocks kicked up when the hammer lands (impact is at ~58% of
+     the swing). Each rock sets --dx/--dy (peak of its arc) and --spin. */
+  .site-loader-rock {
     opacity: 0;
-    animation: spark-burst 0.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    animation: rock-fly 0.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   }
-  @keyframes spark-burst {
-    0%, 57% { opacity: 0; transform: scale(0.4); }
-    62% { opacity: 1; transform: scale(1.15); }
-    75%, 100% { opacity: 0; transform: scale(1.6); }
+  @keyframes rock-fly {
+    0%, 56% { opacity: 0; transform: translate(0, 0) rotate(0deg) scale(0.6); }
+    60% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+    74% {
+      opacity: 1;
+      transform: translate(calc(var(--dx) * 0.7), var(--dy)) rotate(calc(var(--spin) * 0.6)) scale(1);
+    }
+    92% {
+      opacity: 0.9;
+      transform: translate(var(--dx), calc(var(--dy) * -0.2 + 6px)) rotate(var(--spin)) scale(0.9);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--dx), calc(var(--dy) * -0.2 + 8px)) rotate(var(--spin)) scale(0.8);
+    }
   }
+
+  /* Scrollable strip without a visible scrollbar (still swipeable). */
+  .as-no-scrollbar {
+    scrollbar-width: none;
+  }
+  .as-no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Fade a horizontal strip's content out at both edges. */
+  .as-fade-edges {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  }
+
+  /* Hover-only red line that loops around a card's border. Opt in with
+     `as-card-loop` on any `as-card`. */
+  .as-card-loop {
+    position: relative;
+  }
+  .as-card-loop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    border-radius: inherit;
+    padding: 2px;
+    background: conic-gradient(
+      from var(--as-loop-angle),
+      transparent 0deg,
+      transparent 250deg,
+      color-mix(in oklab, var(--brand) 40%, transparent) 300deg,
+      var(--brand) 350deg,
+      transparent 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+  }
+  .as-card-loop:hover::after {
+    opacity: 1;
+    animation: as-loop-spin 2.2s linear infinite;
+  }
+  @keyframes as-loop-spin {
+    to { --as-loop-angle: 360deg; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .as-card-loop:hover::after {
+      animation: none;
+      background: var(--brand);
+    }
+  }
+}
+
+/* Registered so the conic-gradient angle can be animated smoothly. */
+@property --as-loop-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
 }

@@ -464,13 +464,15 @@ const REQUEST_STATUS_LABEL: Record<DbMaterialRequest["status"], MaterialRequest[
   delivered: "Delivered",
 };
 
-export async function fetchMaterialRequests(): Promise<MaterialRequest[]> {
-  const { data: rows, error } = await supabase
+export async function fetchMaterialRequests(projectId?: string): Promise<MaterialRequest[]> {
+  let q = supabase
     .from("material_requests")
     .select(
       "id,project_id,material_id,requested_by,quantity,is_urgent,status,reviewed_by,reviewed_at,created_at",
     )
     .order("created_at", { ascending: false });
+  if (projectId) q = q.eq("project_id", projectId);
+  const { data: rows, error } = await q;
   if (error) throw error;
   const reqs = (rows as DbMaterialRequest[]) ?? [];
   if (reqs.length === 0) return [];
@@ -1549,4 +1551,172 @@ export async function fetchBudgetSummary(): Promise<ProjectBudgetSummary[]> {
     budget: p.budget,
     spent: spentByProject.get(p.id) ?? 0,
   }));
+}
+
+/** Approve a task that was submitted for review, and notify its assignee. */
+export async function approveTask(task: EnrichedTask): Promise<void> {
+  const meId = await currentProfileId();
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("tasks")
+    .update({ status: "approved", approved_by: meId, approved_at: now, completed_at: now })
+    .eq("id", task.id);
+  if (error) throw error;
+  if (task.assignedUserId) {
+    await supabase.from("notifications").insert({
+      title: "Task approved",
+      body: `"${task.title}" was approved.`,
+      kind: "success",
+      for_user_id: task.assignedUserId,
+    });
+  }
+}
+
+/** Send a submitted task back for rework with a reason, and notify its assignee. */
+export async function rejectTask(task: EnrichedTask, reason: string): Promise<void> {
+  const { error } = await supabase
+    .from("tasks")
+    .update({ status: "rejected", rejection_reason: reason })
+    .eq("id", task.id);
+  if (error) throw error;
+  if (task.assignedUserId) {
+    await supabase.from("notifications").insert({
+      title: "Task needs rework",
+      body: reason || `"${task.title}" was rejected.`,
+      kind: "warning",
+      for_user_id: task.assignedUserId,
+    });
+  }
+}
+
+export type DiaryEntry = {
+  id: string;
+  /** null = a project-level entry not tied to one task. */
+  taskId: string | null;
+  projectId: string;
+  authorId: string;
+  entryDate: string;
+  title: string | null;
+  workCompleted: string;
+  weather: string | null;
+  workersOnSite: number | null;
+  hoursWorked: number | null;
+  issues: string | null;
+  createdAt: string;
+};
+
+const DIARY_COLUMNS =
+  "id,task_id,project_id,author_id,entry_date,title,work_completed,weather,workers_on_site,hours_worked,issues,created_at";
+
+function mapDiaryEntry(e: {
+  id: string;
+  task_id: string | null;
+  project_id: string;
+  author_id: string;
+  entry_date: string;
+  title: string | null;
+  work_completed: string;
+  weather: string | null;
+  workers_on_site: number | null;
+  hours_worked: number | null;
+  issues: string | null;
+  created_at: string;
+}): DiaryEntry {
+  return {
+    id: e.id,
+    taskId: e.task_id,
+    projectId: e.project_id,
+    authorId: e.author_id,
+    entryDate: e.entry_date,
+    title: e.title,
+    workCompleted: e.work_completed,
+    weather: e.weather,
+    workersOnSite: e.workers_on_site,
+    hoursWorked: e.hours_worked != null ? Number(e.hours_worked) : null,
+    issues: e.issues,
+    createdAt: e.created_at,
+  };
+}
+
+/** Diary entries for one task, or a whole project (project-level and task-linked) — newest day first. */
+export async function fetchDiaryEntries(
+  filter: { taskId: string } | { projectId: string },
+): Promise<DiaryEntry[]> {
+  let q = supabase
+    .from("task_diary_entries")
+    .select(DIARY_COLUMNS)
+    .order("entry_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  q = "taskId" in filter ? q.eq("task_id", filter.taskId) : q.eq("project_id", filter.projectId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).map(mapDiaryEntry);
+}
+
+export async function addDiaryEntry(input: {
+  taskId?: string | null;
+  projectId: string;
+  entryDate: string;
+  title?: string | null;
+  workCompleted: string;
+  weather?: string | null;
+  workersOnSite?: number | null;
+  hoursWorked?: number | null;
+  issues?: string | null;
+}): Promise<void> {
+  const meId = await currentProfileId();
+  if (!meId) throw new Error("Not signed in");
+  const { error } = await supabase.from("task_diary_entries").insert({
+    task_id: input.taskId ?? null,
+    project_id: input.projectId,
+    author_id: meId,
+    entry_date: input.entryDate,
+    title: input.title || null,
+    work_completed: input.workCompleted,
+    weather: input.weather || null,
+    workers_on_site: input.workersOnSite ?? null,
+    hours_worked: input.hoursWorked ?? null,
+    issues: input.issues || null,
+  });
+  if (error) throw error;
+}
+
+export async function deleteDiaryEntry(id: string): Promise<void> {
+  const { error } = await supabase.from("task_diary_entries").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/** "Remove" a task: archive it so it disappears from the project, while its
+ * diary entries, photos and history are kept. (There is no DELETE policy on
+ * tasks, so a hard delete isn't possible from the client by design.) */
+export async function archiveTask(taskId: string): Promise<void> {
+  const meId = await currentProfileId();
+  const { error } = await supabase
+    .from("tasks")
+    .update({ is_archived: true, archived_at: new Date().toISOString(), archived_by: meId })
+    .eq("id", taskId);
+  if (error) throw error;
+}
+
+export type ArchivedTask = { id: string; title: string; archivedAt: string | null };
+
+/** Removed (archived) tasks for a project, most recently removed first. */
+export async function fetchArchivedTasks(projectId: string): Promise<ArchivedTask[]> {
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("id,task_title,archived_at")
+    .eq("project_id", projectId)
+    .eq("is_archived", true)
+    .order("archived_at", { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  return (data ?? []).map((t) => ({ id: t.id, title: t.task_title, archivedAt: t.archived_at }));
+}
+
+/** Undo archiveTask: put a removed task back on its project. */
+export async function restoreTask(taskId: string): Promise<void> {
+  const { error } = await supabase
+    .from("tasks")
+    .update({ is_archived: false, archived_at: null, archived_by: null })
+    .eq("id", taskId);
+  if (error) throw error;
 }

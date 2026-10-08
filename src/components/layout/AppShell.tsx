@@ -8,14 +8,33 @@ import { cn } from "@/lib/utils";
 import { fetchUnreadNotificationCount } from "@/lib/project-actions";
 import { getNavForRole, getMobileNavForRole } from "./nav-items";
 import { playNotifySound, vibrate } from "@/lib/feedback";
-import { Bell, LogOut, Menu, X } from "lucide-react";
+import { Bell, LogOut, Menu, PanelLeftClose, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
+const SIDEBAR_KEY = "as-sidebar";
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Desktop sidebar can be closed; remembered per browser.
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(SIDEBAR_KEY) === "closed") setSidebarOpen(false);
+    } catch {
+      // storage unavailable — default to open
+    }
+  }, []);
+  const toggleSidebar = (open: boolean) => {
+    setSidebarOpen(open);
+    try {
+      localStorage.setItem(SIDEBAR_KEY, open ? "open" : "closed");
+    } catch {
+      // storage unavailable — state just isn't remembered
+    }
+  };
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const { data: unreadCount = 0 } = useQuery({
@@ -47,9 +66,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-background text-foreground as-grain">
       {/* DESKTOP SIDEBAR */}
-      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-border bg-sidebar lg:flex">
-        <div className="flex h-16 items-center border-b border-sidebar-border px-5">
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-sidebar transition-transform duration-300 lg:flex",
+          !sidebarOpen && "-translate-x-full",
+        )}
+        aria-hidden={!sidebarOpen}
+      >
+        <div className="flex h-16 items-center justify-between border-b border-sidebar-border pl-5 pr-3">
           <Logo />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => toggleSidebar(false)}
+            aria-label="Close menu"
+          >
+            <PanelLeftClose className="size-4" />
+          </Button>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
           {nav.map((item) => {
@@ -62,20 +95,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "as-press flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium",
                   active
-                    ? "bg-brand/15 text-brand"
+                    ? "bg-brand text-brand-foreground shadow-glow-brand"
                     : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <span
                   className={cn(
                     "grid size-7 shrink-0 place-items-center rounded-full",
-                    active && "bg-brand/15 shadow-glow-brand",
+                    active && "bg-brand-foreground/20",
                   )}
                 >
                   <Icon className="size-4" />
                 </span>
                 <span className="truncate">{item.label}</span>
-                {active && <span className="ml-auto size-1.5 rounded-full bg-brand" />}
+                {active && <span className="ml-auto size-1.5 rounded-full bg-brand-foreground" />}
               </Link>
             );
           })}
@@ -108,7 +141,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* TOP BAR (mobile + desktop) */}
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/80 px-3 backdrop-blur lg:left-64 lg:h-16 lg:pl-72 lg:pr-6">
+      <header
+        className={cn(
+          "sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-3 border-b border-border bg-background/80 pt-[env(safe-area-inset-top)] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] backdrop-blur transition-[padding] duration-300 lg:h-16 lg:pr-6",
+          sidebarOpen ? "lg:pl-72" : "lg:pl-6",
+        )}
+      >
         <button
           className="grid size-9 place-items-center rounded-md border border-border lg:hidden"
           onClick={() => setMobileOpen(true)}
@@ -116,10 +154,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           <Menu className="size-5" />
         </button>
-        <div className="flex-1 lg:hidden">
-          <Logo size={24} />
+        {!sidebarOpen && (
+          <button
+            className="hidden size-9 place-items-center rounded-md border border-border hover:bg-accent as-press lg:grid"
+            onClick={() => toggleSidebar(true)}
+            aria-label="Open menu"
+          >
+            <Menu className="size-5" />
+          </button>
+        )}
+        <div className={cn("flex-1", sidebarOpen && "lg:hidden")}>
+          <Logo size={30} compact />
         </div>
-        <div className="hidden flex-1 lg:block">
+        <div className={cn("hidden", sidebarOpen && "flex-1 lg:block")}>
           <div className="text-sm text-muted-foreground">
             Welcome back,{" "}
             <span className="text-foreground font-medium">{user.name.split(" ")[0]}</span>
@@ -150,7 +197,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-sidebar border-r border-sidebar-border">
+          <aside className="absolute inset-y-0 left-0 flex w-[min(18rem,85vw)] flex-col border-r border-sidebar-border bg-sidebar pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
             <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
               <Logo />
               <button
@@ -173,14 +220,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     className={cn(
                       "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium",
                       active
-                        ? "bg-brand/15 text-brand"
+                        ? "bg-brand text-brand-foreground"
                         : "text-sidebar-foreground/80 hover:bg-sidebar-accent",
                     )}
                   >
                     <span
                       className={cn(
                         "grid size-7 shrink-0 place-items-center rounded-full",
-                        active && "bg-brand/15 shadow-glow-brand",
+                        active && "bg-brand-foreground/20",
                       )}
                     >
                       <Icon className="size-4" />
@@ -200,13 +247,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* MAIN */}
-      <main className="pb-24 lg:pb-10 lg:pl-64">
-        <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">{children}</div>
+      <main
+        className={cn(
+          "pb-24 transition-[padding] duration-300 lg:pb-10",
+          sidebarOpen && "lg:pl-64",
+        )}
+      >
+        <div className="mx-auto w-full max-w-7xl py-5 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:py-7 sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))] lg:px-8">
+          {children}
+        </div>
       </main>
 
       {/* MOBILE BOTTOM NAV */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-5 px-1 pb-[max(env(safe-area-inset-bottom),0.25rem)] pt-1.5">
+        <div className="mx-auto grid max-w-md grid-cols-5 pb-[max(env(safe-area-inset-bottom),0.25rem)] pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))] pt-1.5">
           {mobileNav.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.to);
@@ -215,12 +269,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.to + item.label}
                 to={item.to}
                 className={cn(
-                  "as-press flex flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[10px] font-medium",
+                  "as-press flex min-w-0 flex-col items-center gap-0.5 rounded-md px-0.5 py-1.5 text-[10px] font-medium",
                   active ? "text-brand" : "text-muted-foreground",
                 )}
               >
                 <Icon className={cn("size-5", active && "drop-shadow-[0_0_6px_var(--brand)]")} />
-                <span className="truncate">{item.label.split(" ")[0]}</span>
+                <span className="w-full truncate text-center leading-tight">
+                  {item.short ?? item.label}
+                </span>
               </Link>
             );
           })}

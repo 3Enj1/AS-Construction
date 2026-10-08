@@ -36,14 +36,33 @@ export function SupervisorDashboard() {
     <>
       <PageHeader title="Site Supervisor" subtitle="Today on the ground." />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Projects" value={projectCount} icon={HardHat} tone="brand" />
-        <StatCard label="Open tasks" value={active.length} icon={ClipboardList} tone="info" />
-        <StatCard label="Overdue" value={overdue.length} icon={AlertTriangle} tone="danger" />
+        <StatCard
+          label="Projects"
+          value={projectCount}
+          icon={HardHat}
+          tone="brand"
+          to="/projects"
+        />
+        <StatCard
+          label="Open tasks"
+          value={active.length}
+          icon={ClipboardList}
+          tone="info"
+          to="/tasks"
+        />
+        <StatCard
+          label="Overdue"
+          value={overdue.length}
+          icon={AlertTriangle}
+          tone="danger"
+          to="/tasks"
+        />
         <StatCard
           label="Awaiting review"
           value={awaitingReview.length}
           icon={CheckCircle2}
           tone="warning"
+          to="/approvals"
         />
       </div>
       <div className="mt-6">

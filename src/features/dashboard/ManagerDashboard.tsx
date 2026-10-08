@@ -44,15 +44,28 @@ export function ManagerDashboard() {
     <>
       <PageHeader title="Project Manager" subtitle="All projects you oversee." />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Active projects" value={activeCount} icon={Hammer} tone="brand" />
-        <StatCard label="Tasks open" value={open} icon={ClipboardList} tone="info" />
+        <StatCard
+          label="Active projects"
+          value={activeCount}
+          icon={Hammer}
+          tone="brand"
+          to="/projects"
+        />
+        <StatCard label="Tasks open" value={open} icon={ClipboardList} tone="info" to="/tasks" />
         <StatCard
           label="Awaiting approval"
           value={review.length}
           icon={CheckCircle2}
           tone="warning"
+          to="/approvals"
         />
-        <StatCard label="Unread chats" value={unreadChats} icon={MessageSquare} tone="info" />
+        <StatCard
+          label="Unread chats"
+          value={unreadChats}
+          icon={MessageSquare}
+          tone="info"
+          to="/chat"
+        />
       </div>
       <div className="mt-6">
         <TaskTrendChart data={trend} />

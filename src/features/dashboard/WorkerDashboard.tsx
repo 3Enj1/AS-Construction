@@ -25,6 +25,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+// Stat tiles are tappable shortcuts to My Tasks.
+const STAT_TILE =
+  "as-card as-card-loop as-press block p-3 text-center hover:border-brand/40 active:border-brand";
+
 export function WorkerDashboard() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -190,22 +194,22 @@ export function WorkerDashboard() {
 
       {/* STATS */}
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <div className="as-card p-3 text-center">
+        <Link to="/tasks" className={STAT_TILE}>
           <div className="text-2xl font-semibold">{myTasks.length}</div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Assigned</div>
-        </div>
-        <div className="as-card p-3 text-center">
+        </Link>
+        <Link to="/tasks" className={STAT_TILE}>
           <div className="text-2xl font-semibold text-success">{todayDone}</div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
             Done today
           </div>
-        </div>
-        <div className="as-card p-3 text-center">
+        </Link>
+        <Link to="/tasks" className={STAT_TILE}>
           <div className={"text-2xl font-semibold " + (overdue ? "text-danger" : "")}>
             {overdue}
           </div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Overdue</div>
-        </div>
+        </Link>
       </div>
 
       {/* QUICK ACTIONS */}

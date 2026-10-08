@@ -146,21 +146,34 @@ export function AdminDashboard() {
       <SectionLabel>Portfolio</SectionLabel>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
-          { label: "Active projects", value: active.length, icon: Hammer, tone: "brand" as const },
+          {
+            label: "Active projects",
+            value: active.length,
+            icon: Hammer,
+            tone: "brand" as const,
+            to: "/projects",
+          },
           {
             label: "Overall progress",
             value: `${totalProgress}%`,
             icon: TrendingUp,
             tone: "brand" as const,
+            to: "/projects",
           },
-          { label: "Team members", value: teamCount, icon: Users, tone: "neutral" as const },
+          {
+            label: "Team members",
+            value: teamCount,
+            icon: Users,
+            tone: "neutral" as const,
+            to: "/users",
+          },
         ].map((s, idx) => (
           <div
             key={s.label}
             className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-both"
             style={{ animationDelay: `${idx * 60}ms` }}
           >
-            <StatCard label={s.label} value={s.value} icon={s.icon} tone={s.tone} />
+            <StatCard label={s.label} value={s.value} icon={s.icon} tone={s.tone} to={s.to} />
           </div>
         ))}
       </div>
@@ -174,18 +187,21 @@ export function AdminDashboard() {
               value: overdueTasks.length,
               icon: AlertTriangle,
               tone: "danger" as const,
+              to: "/tasks",
             },
             {
               label: "Awaiting approval",
               value: review.length,
               icon: CheckCircle2,
               tone: "warning" as const,
+              to: "/approvals",
             },
             {
               label: "Completed tasks",
               value: completed.length,
               icon: CheckCircle2,
               tone: "info" as const,
+              to: "/tasks",
             },
           ].map((s, idx) => (
             <div
@@ -193,7 +209,7 @@ export function AdminDashboard() {
               className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-both"
               style={{ animationDelay: `${180 + idx * 60}ms` }}
             >
-              <StatCard label={s.label} value={s.value} icon={s.icon} tone={s.tone} />
+              <StatCard label={s.label} value={s.value} icon={s.icon} tone={s.tone} to={s.to} />
             </div>
           ))}
         </div>

@@ -418,6 +418,76 @@ export type Database = {
           },
         ];
       };
+      task_diary_entries: {
+        Row: {
+          author_id: string;
+          created_at: string;
+          entry_date: string;
+          hours_worked: number | null;
+          id: string;
+          issues: string | null;
+          project_id: string;
+          task_id: string | null;
+          title: string | null;
+          updated_at: string;
+          weather: string | null;
+          work_completed: string;
+          workers_on_site: number | null;
+        };
+        Insert: {
+          author_id: string;
+          created_at?: string;
+          entry_date?: string;
+          hours_worked?: number | null;
+          id?: string;
+          issues?: string | null;
+          project_id: string;
+          task_id?: string | null;
+          title?: string | null;
+          updated_at?: string;
+          weather?: string | null;
+          work_completed: string;
+          workers_on_site?: number | null;
+        };
+        Update: {
+          author_id?: string;
+          created_at?: string;
+          entry_date?: string;
+          hours_worked?: number | null;
+          id?: string;
+          issues?: string | null;
+          project_id?: string;
+          task_id?: string | null;
+          title?: string | null;
+          updated_at?: string;
+          weather?: string | null;
+          work_completed?: string;
+          workers_on_site?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "task_diary_entries_author_id_fkey";
+            columns: ["author_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_diary_entries_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_diary_entries_task_id_fkey";
+            columns: ["task_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       task_photos: {
         Row: {
           created_at: string;
