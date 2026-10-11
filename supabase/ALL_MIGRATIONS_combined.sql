@@ -1913,3 +1913,201 @@ alter table public.task_diary_entries add column if not exists title text;
 
 -- Make the change visible to the app's API immediately.
 notify pgrst, 'reload schema';
+
+
+-- ================================================================
+-- FILE: 20261009090000_typed_materials_and_diary.sql
+-- ================================================================
+-- ============================================================
+-- Typed (free-text) materials + richer daily diary.
+--
+-- 1. Material requests no longer have to pick from the inventory list:
+--    the requester types the material name, quantity and unit. Requests
+--    that DO reference an inventory item (material_id) keep the old
+--    behaviour (approving deducts stock); typed ones are just a record.
+-- 2. Diary entries can list the materials used (what + how many) and a
+--    typed task/area, instead of choosing from lists.
+-- 3. New material requests now notify admins + project managers from the
+--    database. Before, the app inserted that notification itself, which
+--    RLS silently blocked for workers — so worker requests notified no one.
+-- ============================================================
+
+-- ---- 1. Material requests: typed material ----
+alter table public.material_requests alter column material_id drop not null;
+alter table public.material_requests
+  add column if not exists material_name text,
+  add column if not exists unit text;
+
+alter table public.material_requests drop constraint if exists material_requests_has_material;
+alter table public.material_requests
+  add constraint material_requests_has_material
+  check (material_id is not null or length(trim(coalesce(material_name, ''))) > 0);
+
+-- ---- 2. Diary: materials used + typed task/area ----
+-- materials_used is a list of { "name": text, "qty": text, "unit": text }.
+alter table public.task_diary_entries
+  add column if not exists materials_used jsonb not null default '[]'::jsonb,
+  add column if not exists task_label text;
+
+alter table public.task_diary_entries drop constraint if exists task_diary_materials_is_array;
+alter table public.task_diary_entries
+  add constraint task_diary_materials_is_array check (jsonb_typeof(materials_used) = 'array');
+
+-- ---- 3. Notify approvers about every new material request ----
+create or replace function public.notify_material_request()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text;
+  v_unit text;
+  v_project text;
+  v_body text;
+begin
+  select coalesce(new.material_name, m.name), coalesce(new.unit, m.unit)
+    into v_name, v_unit
+    from (select 1) one
+    left join public.materials m on m.id = new.material_id;
+  select project_name into v_project from public.projects where id = new.project_id;
+
+  v_body := trim(both ' ' from
+    coalesce(v_name, 'Material') || ' × ' || new.quantity || ' ' || coalesce(v_unit, '')
+  ) || coalesce(' — ' || v_project, '');
+
+  insert into public.notifications (for_role, title, body, kind, link_url)
+  select r, case when new.is_urgent then 'Urgent material request' else 'New material request' end,
+         v_body, case when new.is_urgent then 'warning' else 'info' end::public.notification_kind,
+         '/material-requests'
+  from unnest(array['admin', 'project_manager']::public.app_role[]) as r;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_notify_material_request on public.material_requests;
+create trigger trg_notify_material_request
+  after insert on public.material_requests
+  for each row execute function public.notify_material_request();
+
+-- Make the changes visible to the app's API immediately.
+notify pgrst, 'reload schema';
+
+
+-- ================================================================
+-- FILE: 20261009100000_site_diary_template.sql
+-- ================================================================
+-- ============================================================
+-- Daily site diary in the AS Construction template layout.
+--
+-- Adds the template's sections to task_diary_entries (personnel and
+-- subcontractor tables, the daily-record fields), a drawn signature from
+-- the person recording it, and a "Checked by" sign-off with the
+-- checker's drawn signature.
+--
+-- Existing columns are reused: weather, work_completed, issues (now shown
+-- as "Delays and impact"), materials_used, task_label, title.
+-- workers_on_site / hours_worked are kept for older entries only.
+-- ============================================================
+
+alter table public.task_diary_entries
+  add column if not exists working_hours text,
+  -- [{ "name", "role", "hours" }]
+  add column if not exists personnel jsonb not null default '[]'::jsonb,
+  -- [{ "trade", "people", "hours", "work" }]
+  add column if not exists subcontractors jsonb not null default '[]'::jsonb,
+  add column if not exists materials_delivered text,
+  add column if not exists plant_equipment text,
+  add column if not exists inspections text,
+  add column if not exists instructions text,
+  add column if not exists health_safety text,
+  add column if not exists visitors text,
+  add column if not exists photographs text,
+  add column if not exists next_day text,
+  -- Drawn signatures, stored as PNG data URLs (small: a few KB each).
+  add column if not exists recorder_signature text,
+  add column if not exists checked_by uuid references public.profiles(id) on delete set null,
+  add column if not exists checked_at timestamptz,
+  add column if not exists checker_signature text;
+
+alter table public.task_diary_entries drop constraint if exists task_diary_personnel_is_array;
+alter table public.task_diary_entries
+  add constraint task_diary_personnel_is_array check (jsonb_typeof(personnel) = 'array');
+alter table public.task_diary_entries drop constraint if exists task_diary_subcontractors_is_array;
+alter table public.task_diary_entries
+  add constraint task_diary_subcontractors_is_array check (jsonb_typeof(subcontractors) = 'array');
+alter table public.task_diary_entries drop constraint if exists task_diary_signature_sizes;
+alter table public.task_diary_entries
+  add constraint task_diary_signature_sizes check (
+    coalesce(length(recorder_signature), 0) <= 300000
+    and coalesce(length(checker_signature), 0) <= 300000
+  );
+
+-- ---- Sign-off ----
+-- Only admins / project managers / site supervisors can check an entry,
+-- and only through this function: it stamps *their own* profile id and the
+-- current time, so a checker can't be impersonated or back-dated.
+create or replace function public.sign_off_diary_entry(_entry_id uuid, _signature text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not (
+    public.has_role(auth.uid(), 'admin')
+    or public.has_role(auth.uid(), 'project_manager')
+    or public.has_role(auth.uid(), 'site_supervisor')
+  ) then
+    raise exception 'Only an admin, project manager or site supervisor can check a diary entry.';
+  end if;
+  if _signature is null or length(_signature) < 100 then
+    raise exception 'A signature is required.';
+  end if;
+
+  perform set_config('app.diary_signoff', 'on', true);
+  update public.task_diary_entries
+     set checked_by = public.current_profile_id(),
+         checked_at = now(),
+         checker_signature = _signature
+   where id = _entry_id;
+  if not found then
+    raise exception 'Diary entry not found.';
+  end if;
+end;
+$$;
+
+grant execute on function public.sign_off_diary_entry(uuid, text) to authenticated;
+
+-- The author's own UPDATE policy must not let them fill in (or clear) the
+-- "checked" fields themselves — those only change via sign_off_diary_entry().
+create or replace function public.protect_diary_signoff()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if coalesce(current_setting('app.diary_signoff', true), '') = 'on' then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    if new.checked_by is not null or new.checked_at is not null or new.checker_signature is not null then
+      raise exception 'A new diary entry cannot be pre-checked.';
+    end if;
+  elsif new.checked_by is distinct from old.checked_by
+     or new.checked_at is distinct from old.checked_at
+     or new.checker_signature is distinct from old.checker_signature then
+    raise exception 'Use "Sign as checker" to check a diary entry.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_protect_diary_signoff on public.task_diary_entries;
+create trigger trg_protect_diary_signoff
+  before insert or update on public.task_diary_entries
+  for each row execute function public.protect_diary_signoff();
+
+-- Make the changes visible to the app's API immediately.
+notify pgrst, 'reload schema';

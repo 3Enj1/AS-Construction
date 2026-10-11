@@ -426,13 +426,30 @@ export type Database = {
           hours_worked: number | null;
           id: string;
           issues: string | null;
+          materials_used: Json;
           project_id: string;
           task_id: string | null;
+          task_label: string | null;
           title: string | null;
           updated_at: string;
           weather: string | null;
           work_completed: string;
           workers_on_site: number | null;
+          working_hours: string | null;
+          personnel: Json;
+          subcontractors: Json;
+          materials_delivered: string | null;
+          plant_equipment: string | null;
+          inspections: string | null;
+          instructions: string | null;
+          health_safety: string | null;
+          visitors: string | null;
+          photographs: string | null;
+          next_day: string | null;
+          recorder_signature: string | null;
+          checked_by: string | null;
+          checked_at: string | null;
+          checker_signature: string | null;
         };
         Insert: {
           author_id: string;
@@ -441,13 +458,30 @@ export type Database = {
           hours_worked?: number | null;
           id?: string;
           issues?: string | null;
+          materials_used?: Json;
           project_id: string;
           task_id?: string | null;
+          task_label?: string | null;
           title?: string | null;
           updated_at?: string;
           weather?: string | null;
           work_completed: string;
           workers_on_site?: number | null;
+          working_hours?: string | null;
+          personnel?: Json;
+          subcontractors?: Json;
+          materials_delivered?: string | null;
+          plant_equipment?: string | null;
+          inspections?: string | null;
+          instructions?: string | null;
+          health_safety?: string | null;
+          visitors?: string | null;
+          photographs?: string | null;
+          next_day?: string | null;
+          recorder_signature?: string | null;
+          checked_by?: string | null;
+          checked_at?: string | null;
+          checker_signature?: string | null;
         };
         Update: {
           author_id?: string;
@@ -456,13 +490,30 @@ export type Database = {
           hours_worked?: number | null;
           id?: string;
           issues?: string | null;
+          materials_used?: Json;
           project_id?: string;
           task_id?: string | null;
+          task_label?: string | null;
           title?: string | null;
           updated_at?: string;
           weather?: string | null;
           work_completed?: string;
           workers_on_site?: number | null;
+          working_hours?: string | null;
+          personnel?: Json;
+          subcontractors?: Json;
+          materials_delivered?: string | null;
+          plant_equipment?: string | null;
+          inspections?: string | null;
+          instructions?: string | null;
+          health_safety?: string | null;
+          visitors?: string | null;
+          photographs?: string | null;
+          next_day?: string | null;
+          recorder_signature?: string | null;
+          checked_by?: string | null;
+          checked_at?: string | null;
+          checker_signature?: string | null;
         };
         Relationships: [
           {
@@ -922,7 +973,8 @@ export type Database = {
           created_at: string;
           id: string;
           is_urgent: boolean;
-          material_id: string;
+          material_id: string | null;
+          material_name: string | null;
           notes: string | null;
           project_id: string;
           quantity: number;
@@ -930,12 +982,14 @@ export type Database = {
           reviewed_at: string | null;
           reviewed_by: string | null;
           status: Database["public"]["Enums"]["material_request_status"];
+          unit: string | null;
         };
         Insert: {
           created_at?: string;
           id?: string;
           is_urgent?: boolean;
-          material_id: string;
+          material_id?: string | null;
+          material_name?: string | null;
           notes?: string | null;
           project_id: string;
           quantity: number;
@@ -943,12 +997,14 @@ export type Database = {
           reviewed_at?: string | null;
           reviewed_by?: string | null;
           status?: Database["public"]["Enums"]["material_request_status"];
+          unit?: string | null;
         };
         Update: {
           created_at?: string;
           id?: string;
           is_urgent?: boolean;
-          material_id?: string;
+          material_id?: string | null;
+          material_name?: string | null;
           notes?: string | null;
           project_id?: string;
           quantity?: number;
@@ -956,6 +1012,7 @@ export type Database = {
           reviewed_at?: string | null;
           reviewed_by?: string | null;
           status?: Database["public"]["Enums"]["material_request_status"];
+          unit?: string | null;
         };
         Relationships: [
           {
@@ -1297,6 +1354,7 @@ export type Database = {
         Returns: boolean;
       };
       is_project_member: { Args: { _project_id: string }; Returns: boolean };
+      sign_off_diary_entry: { Args: { _entry_id: string; _signature: string }; Returns: undefined };
       resolve_employee_email: { Args: { _code: string }; Returns: string };
     };
     Enums: {

@@ -1,46 +1,45 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { SignaturePad } from "@/components/ui/signature-pad";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth-context";
-import { formatDate } from "@/lib/format";
 import {
   addDiaryEntry,
   deleteDiaryEntry,
   fetchDiaryEntries,
+  signOffDiaryEntry,
   type DiaryEntry,
+  type DiaryMaterial,
+  type DiaryPerson,
+  type DiarySubcontractor,
 } from "@/lib/project-actions";
+import { formatDiaryDay, printDiaryEntry } from "@/lib/diary-print";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   AlertTriangle,
   BookOpen,
+  CheckCircle2,
   ChevronRight,
   Clock,
-  CloudSun,
+  PenLine,
   Plus,
+  Printer,
   Trash2,
-  Users,
   X,
 } from "lucide-react";
-
-const WEATHER_OPTIONS = ["Sunny", "Partly cloudy", "Overcast", "Rain", "Windy", "Storm"];
 
 /** Local calendar date as YYYY-MM-DD (not UTC), so "today" matches the site's day. */
 function todayLocal(): string {
@@ -54,64 +53,612 @@ function diaryTitle(entry: DiaryEntry): string {
   return firstLine.length > 60 ? `${firstLine.slice(0, 57)}…` : firstLine;
 }
 
-/** Date-only value: parse as local midnight, not UTC, so it can't shift a day. */
-function formatEntryDate(entryDate: string): string {
-  return formatDate(`${entryDate}T00:00:00`);
+const CAN_CHECK_ROLES = ["admin", "project_manager", "site_supervisor"] as const;
+
+// ============================================================
+// Form building blocks
+// ============================================================
+
+function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+  return (
+    <section className="grid gap-2.5">
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-brand">{title}</h3>
+        {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+      </div>
+      {children}
+    </section>
+  );
 }
 
-function DiaryEntryCard({
+function Field({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  multiline,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  multiline?: boolean;
+}) {
+  return (
+    <div className="grid gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      {multiline ? (
+        <Textarea
+          id={id}
+          rows={2}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : (
+        <Input
+          id={id}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+
+type RowField<T> = {
+  key: keyof T & string;
+  placeholder: string;
+  /** Column span in the row's 6-column grid, e.g. "col-span-6 sm:col-span-2". */
+  span: string;
+  inputMode?: "numeric" | "decimal";
+};
+
+/** Typed table rows (personnel, subcontractors, materials): add / edit / remove. */
+function RowsEditor<T extends Record<string, string>>({
+  rows,
+  onChange,
+  fields,
+  blank,
+  addLabel,
+}: {
+  rows: T[];
+  onChange: (rows: T[]) => void;
+  fields: RowField<T>[];
+  blank: T;
+  addLabel: string;
+}) {
+  const set = (i: number, key: keyof T, v: string) =>
+    onChange(rows.map((r, j) => (j === i ? { ...r, [key]: v } : r)));
+  return (
+    <div className="grid gap-2">
+      {rows.map((row, i) => (
+        <div
+          key={i}
+          className="relative grid grid-cols-6 gap-1.5 rounded-md border border-border bg-card p-2 pr-9"
+        >
+          {fields.map((f) => (
+            <Input
+              key={f.key}
+              aria-label={f.placeholder}
+              placeholder={f.placeholder}
+              inputMode={f.inputMode}
+              value={row[f.key]}
+              onChange={(e) => set(i, f.key, e.target.value)}
+              className={cn("h-9", f.span)}
+            />
+          ))}
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="absolute right-0.5 top-1.5 size-8 text-muted-foreground hover:text-danger"
+            aria-label="Remove row"
+            onClick={() => onChange(rows.filter((_, j) => j !== i))}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="justify-self-start"
+        onClick={() => onChange([...rows, { ...blank }])}
+      >
+        <Plus className="size-4" /> {addLabel}
+      </Button>
+    </div>
+  );
+}
+
+const BLANK_PERSON: DiaryPerson = { name: "", role: "", hours: "" };
+const BLANK_SUB: DiarySubcontractor = { trade: "", people: "", hours: "", work: "" };
+const BLANK_MATERIAL: DiaryMaterial = { name: "", qty: "", unit: "" };
+
+const PERSON_FIELDS: RowField<DiaryPerson>[] = [
+  { key: "name", placeholder: "Name", span: "col-span-6 sm:col-span-2" },
+  { key: "role", placeholder: "Role", span: "col-span-3 sm:col-span-2" },
+  { key: "hours", placeholder: "07:30–16:30", span: "col-span-3 sm:col-span-2" },
+];
+const SUB_FIELDS: RowField<DiarySubcontractor>[] = [
+  { key: "trade", placeholder: "Trade (e.g. Plumber)", span: "col-span-6 sm:col-span-2" },
+  { key: "people", placeholder: "People", span: "col-span-2 sm:col-span-1", inputMode: "numeric" },
+  { key: "hours", placeholder: "08:00–15:30", span: "col-span-4 sm:col-span-3" },
+  { key: "work", placeholder: "Work carried out", span: "col-span-6" },
+];
+const MATERIAL_FIELDS: RowField<DiaryMaterial>[] = [
+  { key: "name", placeholder: "Material", span: "col-span-6 sm:col-span-3" },
+  { key: "qty", placeholder: "Qty", span: "col-span-3 sm:col-span-1", inputMode: "decimal" },
+  { key: "unit", placeholder: "Unit", span: "col-span-3 sm:col-span-2" },
+];
+
+// ============================================================
+// New entry form (AS Construction daily site diary template)
+// ============================================================
+
+const EMPTY_TEXT = {
+  title: "",
+  taskLabel: "",
+  workingHours: "",
+  weather: "",
+  workCompleted: "",
+  materialsDelivered: "",
+  plantEquipment: "",
+  inspections: "",
+  instructions: "",
+  issues: "",
+  healthSafety: "",
+  visitors: "",
+  photographs: "",
+  nextDay: "",
+};
+
+function AddDiaryEntryForm({
+  taskId: fixedTaskId,
+  projectId,
+  onDone,
+  cancelLabel = "Cancel",
+}: {
+  /** Lock the entry to one task (task popup). Omit for a project-level entry. */
+  taskId?: string;
+  projectId: string;
+  onDone: () => void;
+  cancelLabel?: string;
+}) {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const [entryDate, setEntryDate] = useState(todayLocal());
+  const [t, setT] = useState(EMPTY_TEXT);
+  const [personnel, setPersonnel] = useState<DiaryPerson[]>([{ ...BLANK_PERSON }]);
+  const [subcontractors, setSubcontractors] = useState<DiarySubcontractor[]>([]);
+  const [materials, setMaterials] = useState<DiaryMaterial[]>([]);
+  const [signature, setSignature] = useState<string | null>(null);
+  const field = (key: keyof typeof EMPTY_TEXT) => ({
+    value: t[key],
+    onChange: (v: string) => setT((prev) => ({ ...prev, [key]: v })),
+  });
+
+  const add = useMutation({
+    mutationFn: () =>
+      addDiaryEntry({
+        ...t,
+        taskId: fixedTaskId ?? null,
+        taskLabel: fixedTaskId ? null : t.taskLabel,
+        projectId,
+        entryDate,
+        personnel,
+        subcontractors,
+        materialsUsed: materials,
+        recorderSignature: signature!,
+      }),
+    onSuccess: () => {
+      toast.success("Diary sent");
+      qc.invalidateQueries({ queryKey: ["diary"] });
+      onDone();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const missing = [
+    !t.title.trim() && "a title",
+    !entryDate && "the date",
+    !t.workCompleted.trim() && "work completed",
+    !signature && "your signature",
+  ].filter(Boolean) as string[];
+
+  return (
+    <div className="grid gap-5 rounded-md border border-border bg-surface-2 p-3 sm:p-4">
+      <Section title="Day and site">
+        <Field
+          id="diary-title"
+          label="Title / summary"
+          placeholder="e.g. Internal brickwork, ground floor"
+          {...field("title")}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="grid content-start gap-1.5">
+            <Label htmlFor="diary-date">Date</Label>
+            <Input
+              id="diary-date"
+              type="date"
+              value={entryDate}
+              max={todayLocal()}
+              onChange={(e) => setEntryDate(e.target.value)}
+            />
+            {entryDate && (
+              <span className="text-[11px] text-muted-foreground">{formatDiaryDay(entryDate)}</span>
+            )}
+          </div>
+          <Field
+            id="diary-hours"
+            label="Working hours"
+            placeholder="07:30–16:30"
+            {...field("workingHours")}
+          />
+        </div>
+        <Field
+          id="diary-weather"
+          label="Weather"
+          placeholder="e.g. Light rain in the morning; clear from 10:00"
+          {...field("weather")}
+        />
+        {!fixedTaskId && (
+          <Field
+            id="diary-task"
+            label="Task / area (optional)"
+            placeholder="e.g. Ground floor walls"
+            {...field("taskLabel")}
+          />
+        )}
+      </Section>
+
+      <Section
+        title="AS Construction personnel on site"
+        hint="List each person separately so there is a clear daily attendance record."
+      >
+        <RowsEditor
+          rows={personnel}
+          onChange={setPersonnel}
+          fields={PERSON_FIELDS}
+          blank={BLANK_PERSON}
+          addLabel="Add person"
+        />
+      </Section>
+
+      <Section title="Subcontractors on site">
+        <RowsEditor
+          rows={subcontractors}
+          onChange={setSubcontractors}
+          fields={SUB_FIELDS}
+          blank={BLANK_SUB}
+          addLabel="Add subcontractor"
+        />
+      </Section>
+
+      <Section title="Daily activities and site records">
+        <Field
+          id="diary-work"
+          label="Work completed"
+          placeholder="What was done on site today?"
+          multiline
+          {...field("workCompleted")}
+        />
+        <Field
+          id="diary-delivered"
+          label="Materials delivered"
+          placeholder="What arrived, from whom, when, delivery note filed?"
+          multiline
+          {...field("materialsDelivered")}
+        />
+        <div className="grid gap-1.5">
+          <Label>Materials used</Label>
+          <RowsEditor
+            rows={materials}
+            onChange={setMaterials}
+            fields={MATERIAL_FIELDS}
+            blank={BLANK_MATERIAL}
+            addLabel="Add material"
+          />
+        </div>
+        <Field
+          id="diary-plant"
+          label="Plant and equipment"
+          placeholder="Equipment used, breakdowns"
+          multiline
+          {...field("plantEquipment")}
+        />
+        <Field
+          id="diary-inspections"
+          label="Inspections and quality"
+          placeholder="Checks done, anything corrected"
+          multiline
+          {...field("inspections")}
+        />
+        <Field
+          id="diary-instructions"
+          label="Instructions received"
+          placeholder="From architect, client, engineer…"
+          multiline
+          {...field("instructions")}
+        />
+        <Field
+          id="diary-delays"
+          label="Delays and impact"
+          placeholder="What held work up and what the crew did instead"
+          multiline
+          {...field("issues")}
+        />
+        <Field
+          id="diary-hs"
+          label="Health and safety"
+          placeholder="Toolbox talks, incidents, near misses"
+          multiline
+          {...field("healthSafety")}
+        />
+        <Field
+          id="diary-visitors"
+          label="Visitors"
+          placeholder="Who visited and why"
+          {...field("visitors")}
+        />
+        <Field
+          id="diary-photos"
+          label="Photographs"
+          placeholder="e.g. Photos 01–04: internal brickwork"
+          multiline
+          {...field("photographs")}
+        />
+        <Field
+          id="diary-next"
+          label="Next working day"
+          placeholder="Planned work for tomorrow"
+          multiline
+          {...field("nextDay")}
+        />
+      </Section>
+
+      <Section title="Recorded by">
+        <div className="text-sm">
+          <span className="font-medium">{user?.name}</span>
+          <span className="text-muted-foreground"> — sign below</span>
+        </div>
+        <SignaturePad onChange={setSignature} />
+      </Section>
+
+      <div className="grid gap-2">
+        {missing.length > 0 && (
+          <p className="text-right text-[11px] text-muted-foreground">
+            Still needed: {missing.join(", ")}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={onDone}>
+            {cancelLabel}
+          </Button>
+          <Button
+            size="sm"
+            variant="brand"
+            disabled={missing.length > 0 || add.isPending}
+            onClick={() => add.mutate()}
+          >
+            {add.isPending ? "Sending…" : "Send diary"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Viewing an entry
+// ============================================================
+
+function ViewTable({ head, rows }: { head: string[]; rows: string[][] }) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-border">
+      <table className="w-full text-xs">
+        <thead className="bg-muted/60 text-left">
+          <tr>
+            {head.map((h) => (
+              <th key={h} className="px-2 py-1.5 font-semibold">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map((r, i) => (
+            <tr key={i}>
+              {r.map((c, j) => (
+                <td key={j} className="px-2 py-1.5 align-top">
+                  {c || "—"}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SignatureBlock({
+  label,
+  name,
+  when,
+  signature,
+}: {
+  label: string;
+  name?: string;
+  when?: string;
+  signature: string | null;
+}) {
+  return (
+    <div className="rounded-md border border-border p-2">
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-sm font-medium">{name ?? "—"}</div>
+      {when && <div className="text-[11px] text-muted-foreground">{when}</div>}
+      {signature ? (
+        <img
+          src={signature}
+          alt={`${label} signature`}
+          className="mt-1 h-16 w-full rounded bg-white object-contain"
+        />
+      ) : (
+        <div className="mt-1 grid h-16 place-items-center rounded bg-muted/40 text-[11px] text-muted-foreground">
+          No signature
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SignOffDialog({
+  entry,
+  open,
+  onOpenChange,
+}: {
+  entry: DiaryEntry;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const [signature, setSignature] = useState<string | null>(null);
+  const sign = useMutation({
+    mutationFn: () => signOffDiaryEntry(entry.id, signature!),
+    onSuccess: () => {
+      toast.success("Diary checked and signed");
+      qc.invalidateQueries({ queryKey: ["diary"] });
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Sign as checker</DialogTitle>
+          <DialogDescription>
+            {diaryTitle(entry)} · {formatDiaryDay(entry.entryDate)}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="text-sm">
+          Checked by <span className="font-medium">{user?.name}</span>
+        </div>
+        {open && <SignaturePad onChange={setSignature} />}
+        <DialogFooter>
+          <Button
+            variant="brand"
+            disabled={!signature || sign.isPending}
+            onClick={() => sign.mutate()}
+          >
+            <PenLine className="size-4" /> {sign.isPending ? "Signing…" : "Sign and mark checked"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DiaryEntryView({
   entry,
   taskTitle,
-  onDelete,
-  deleting,
+  onDeleted,
 }: {
   entry: DiaryEntry;
   taskTitle?: string;
-  onDelete?: () => void;
-  deleting?: boolean;
+  onDeleted: () => void;
 }) {
-  const { allUsers } = useAuth();
+  const { user, hasRole, allUsers } = useAuth();
+  const [signing, setSigning] = useState(false);
+  const remove = useDeleteDiaryEntry();
   const author = allUsers.find((u) => u.id === entry.authorId);
+  const checker = entry.checkedBy ? allUsers.find((u) => u.id === entry.checkedBy) : undefined;
+  const canDelete = entry.authorId === user?.id || hasRole("admin");
+  const canCheck = !entry.checkedBy && hasRole(...CAN_CHECK_ROLES);
+  const task = taskTitle ?? entry.taskLabel ?? undefined;
+
+  const details: [string, string | null | undefined][] = [
+    ["Date", formatDiaryDay(entry.entryDate)],
+    ["Working hours", entry.workingHours],
+    ["Weather", entry.weather],
+    ["Task / area", task],
+  ];
+  const records: [string, string | null | undefined][] = [
+    ["Work completed", entry.workCompleted],
+    ["Materials delivered", entry.materialsDelivered],
+    ["Plant and equipment", entry.plantEquipment],
+    ["Inspections and quality", entry.inspections],
+    ["Instructions received", entry.instructions],
+    ["Delays and impact", entry.issues],
+    ["Health and safety", entry.healthSafety],
+    ["Visitors", entry.visitors],
+    ["Photographs", entry.photographs],
+    ["Next working day", entry.nextDay],
+  ];
+
+  const print = async () => {
+    try {
+      await printDiaryEntry(entry, { author: author?.name, checker: checker?.name, task });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not open the print view");
+    }
+  };
+
   return (
-    <div className="rounded-md border border-border p-3 text-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          {author && <UserAvatar user={author} size={24} />}
-          <div className="min-w-0">
-            <div className="truncate font-medium">{author?.name ?? "Unknown"}</div>
-            <div className="text-[11px] text-muted-foreground">
-              {formatEntryDate(entry.entryDate)}
-              {taskTitle ? ` · ${taskTitle}` : ""}
-            </div>
+    <div className="grid gap-4 text-sm">
+      <div className="flex items-start gap-2">
+        {author && <UserAvatar user={author} size={28} />}
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold">{diaryTitle(entry)}</div>
+          <div className="text-xs text-muted-foreground">
+            {formatDiaryDay(entry.entryDate)} · recorded by {author?.name ?? "Unknown"}
           </div>
         </div>
-        {onDelete && (
-          <Button
-            size="icon"
-            variant="ghost"
-            className="size-7 shrink-0 text-muted-foreground hover:text-danger"
-            disabled={deleting}
-            onClick={onDelete}
-            aria-label="Delete diary entry"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        )}
       </div>
-      <div className="mt-2 font-semibold">{diaryTitle(entry)}</div>
-      <div className="mt-1 whitespace-pre-wrap">{entry.workCompleted}</div>
-      {(entry.weather || entry.workersOnSite != null || entry.hoursWorked != null) && (
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          {entry.weather && (
-            <span className="inline-flex items-center gap-1">
-              <CloudSun className="size-3.5" /> {entry.weather}
-            </span>
-          )}
-          {entry.workersOnSite != null && (
-            <span className="inline-flex items-center gap-1">
-              <Users className="size-3.5" /> {entry.workersOnSite} on site
-            </span>
-          )}
+
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        {details
+          .filter(([, v]) => v)
+          .map(([k, v]) => (
+            <div key={k} className="contents">
+              <dt className="text-muted-foreground">{k}</dt>
+              <dd>{v}</dd>
+            </div>
+          ))}
+      </dl>
+
+      {entry.personnel.length > 0 && (
+        <div className="grid gap-1.5">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-brand">
+            AS Construction personnel on site
+          </h4>
+          <ViewTable
+            head={["Name", "Role", "Hours on site"]}
+            rows={entry.personnel.map((p) => [p.name, p.role, p.hours])}
+          />
+        </div>
+      )}
+      {entry.subcontractors.length > 0 && (
+        <div className="grid gap-1.5">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-brand">
+            Subcontractors on site
+          </h4>
+          <ViewTable
+            head={["Trade", "People", "Hours", "Work carried out"]}
+            rows={entry.subcontractors.map((s) => [s.trade, s.people, s.hours, s.work])}
+          />
+        </div>
+      )}
+      {(entry.workersOnSite != null || entry.hoursWorked != null) && (
+        <div className="flex gap-4 text-xs text-muted-foreground">
+          {entry.workersOnSite != null && <span>{entry.workersOnSite} on site</span>}
           {entry.hoursWorked != null && (
             <span className="inline-flex items-center gap-1">
               <Clock className="size-3.5" /> {entry.hoursWorked} h
@@ -119,12 +666,90 @@ function DiaryEntryCard({
           )}
         </div>
       )}
-      {entry.issues && (
-        <div className="mt-2 flex gap-1.5 rounded-md bg-warning/10 px-2 py-1.5 text-xs">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
-          <span className="whitespace-pre-wrap">{entry.issues}</span>
+
+      <div className="grid gap-1.5">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-brand">
+          Daily activities and site records
+        </h4>
+        <div className="divide-y divide-border rounded-md border border-border">
+          {records
+            .filter(([, v]) => v && v.trim())
+            .map(([k, v]) => (
+              <div key={k} className="grid gap-0.5 px-2 py-1.5 sm:grid-cols-[11rem_1fr] sm:gap-3">
+                <div className="text-xs font-semibold">{k}</div>
+                <div
+                  className={cn(
+                    "whitespace-pre-wrap text-xs",
+                    k === "Delays and impact" && "text-warning",
+                  )}
+                >
+                  {v}
+                </div>
+              </div>
+            ))}
+          {entry.materialsUsed.length > 0 && (
+            <div className="grid gap-1 px-2 py-1.5 sm:grid-cols-[11rem_1fr] sm:gap-3">
+              <div className="text-xs font-semibold">Materials used</div>
+              <ul className="text-xs">
+                {entry.materialsUsed.map((m, i) => (
+                  <li key={i} className="flex justify-between gap-3">
+                    <span>{m.name}</span>
+                    <span className="font-medium tabular-nums">
+                      {m.qty || "—"}
+                      {m.unit ? ` ${m.unit}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-      )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <SignatureBlock
+          label="Recorded by"
+          name={author?.name}
+          signature={entry.recorderSignature}
+        />
+        <SignatureBlock
+          label="Checked by"
+          name={entry.checkedBy ? (checker?.name ?? "Unknown") : "Not yet checked"}
+          when={
+            entry.checkedAt
+              ? new Date(entry.checkedAt).toLocaleString("en-ZA", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })
+              : undefined
+          }
+          signature={entry.checkerSignature}
+        />
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-2">
+        {canDelete && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-danger/40 text-danger hover:bg-danger/10"
+            disabled={remove.isPending}
+            onClick={() => remove.mutate(entry.id, { onSuccess: onDeleted })}
+          >
+            <Trash2 className="size-4" /> Delete
+          </Button>
+        )}
+        <Button size="sm" variant="outline" onClick={print}>
+          <Printer className="size-4" /> Print / Save PDF
+        </Button>
+        {canCheck && (
+          <Button size="sm" variant="brand" onClick={() => setSigning(true)}>
+            <PenLine className="size-4" /> Sign as checker
+          </Button>
+        )}
+      </div>
+
+      <SignOffDialog entry={entry} open={signing} onOpenChange={setSigning} />
     </div>
   );
 }
@@ -141,176 +766,88 @@ function useDeleteDiaryEntry() {
   });
 }
 
-function AddDiaryEntryForm({
-  taskId: fixedTaskId,
-  projectId,
-  tasks,
-  onDone,
-  cancelLabel = "Cancel",
+/** Rows of "title + day/date" that open the full entry. */
+function DiaryEntryList({
+  entries,
+  taskTitles,
+  className,
 }: {
-  /** Lock the entry to one task (task popup). Omit for a project-level entry. */
-  taskId?: string;
-  projectId: string;
-  /** Project-level form only: lets the writer optionally link a task. */
-  tasks?: { id: string; title: string }[];
-  onDone: () => void;
-  cancelLabel?: string;
+  entries: DiaryEntry[];
+  taskTitles?: Map<string, string>;
+  className?: string;
 }) {
-  const qc = useQueryClient();
-  const [linkedTaskId, setLinkedTaskId] = useState("none");
-  const [title, setTitle] = useState("");
-  const [entryDate, setEntryDate] = useState(todayLocal());
-  const [workCompleted, setWorkCompleted] = useState("");
-  const [weather, setWeather] = useState("none");
-  const [workers, setWorkers] = useState("");
-  const [hours, setHours] = useState("");
-  const [issues, setIssues] = useState("");
-
-  const add = useMutation({
-    mutationFn: () =>
-      addDiaryEntry({
-        taskId: fixedTaskId ?? (linkedTaskId === "none" ? null : linkedTaskId),
-        projectId,
-        entryDate,
-        title: title.trim(),
-        workCompleted: workCompleted.trim(),
-        weather: weather === "none" ? null : weather,
-        workersOnSite: workers.trim() ? Number(workers) : null,
-        hoursWorked: hours.trim() ? Number(hours) : null,
-        issues: issues.trim() || null,
-      }),
-    onSuccess: () => {
-      toast.success("Diary entry saved");
-      qc.invalidateQueries({ queryKey: ["diary"] });
-      onDone();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+  const { allUsers } = useAuth();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openEntry = entries.find((e) => e.id === openId) ?? null;
+  const taskFor = (e: DiaryEntry) =>
+    e.taskId
+      ? (taskTitles?.get(e.taskId) ?? (taskTitles ? "Archived task" : undefined))
+      : (e.taskLabel ?? undefined);
 
   return (
-    <div className="grid gap-3 rounded-md border border-border bg-surface-2 p-3">
-      <div className="grid gap-1.5">
-        <Label htmlFor="diary-title">Title</Label>
-        <Input
-          id="diary-title"
-          placeholder="e.g. Foundations poured, east wall"
-          maxLength={120}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
+    <>
+      <div className={cn("divide-y divide-border", className)}>
+        {entries.map((e) => {
+          const author = allUsers.find((u) => u.id === e.authorId);
+          const task = taskFor(e);
+          return (
+            <button
+              key={e.id}
+              onClick={() => setOpenId(e.id)}
+              className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-accent as-press sm:px-4"
+            >
+              <div className="grid size-9 shrink-0 place-items-center rounded-md bg-brand/10 text-brand">
+                <BookOpen className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{diaryTitle(e)}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {formatDiaryDay(e.entryDate)}
+                  {author ? ` · ${author.name.split(" ")[0]}` : ""}
+                  {task ? ` · ${task}` : ""}
+                </div>
+              </div>
+              {e.checkedBy ? (
+                <CheckCircle2 className="size-4 shrink-0 text-success" aria-label="Checked" />
+              ) : (
+                <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">
+                  Unchecked
+                </span>
+              )}
+              {e.issues && (
+                <AlertTriangle className="size-4 shrink-0 text-warning" aria-label="Has delays" />
+              )}
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            </button>
+          );
+        })}
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="grid gap-1.5">
-          <Label htmlFor="diary-date">Date</Label>
-          <Input
-            id="diary-date"
-            type="date"
-            value={entryDate}
-            max={todayLocal()}
-            onChange={(e) => setEntryDate(e.target.value)}
-          />
-        </div>
-        <div className="grid gap-1.5">
-          <Label>Weather</Label>
-          <Select value={weather} onValueChange={setWeather}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Not recorded</SelectItem>
-              {WEATHER_OPTIONS.map((w) => (
-                <SelectItem key={w} value={w}>
-                  {w}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      {!fixedTaskId && tasks && tasks.length > 0 && (
-        <div className="grid gap-1.5">
-          <Label>Task (optional)</Label>
-          <Select value={linkedTaskId} onValueChange={setLinkedTaskId}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Whole project</SelectItem>
-              {tasks.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-      <div className="grid gap-1.5">
-        <Label htmlFor="diary-work">Work completed today</Label>
-        <Textarea
-          id="diary-work"
-          rows={3}
-          placeholder={
-            fixedTaskId ? "What was done on this task today?" : "What was done on site today?"
-          }
-          value={workCompleted}
-          onChange={(e) => setWorkCompleted(e.target.value)}
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="grid gap-1.5">
-          <Label htmlFor="diary-workers">Workers on site</Label>
-          <Input
-            id="diary-workers"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            step={1}
-            value={workers}
-            onChange={(e) => setWorkers(e.target.value)}
-          />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="diary-hours">Hours worked</Label>
-          <Input
-            id="diary-hours"
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step="0.5"
-            value={hours}
-            onChange={(e) => setHours(e.target.value)}
-          />
-        </div>
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="diary-issues">Issues / delays (optional)</Label>
-        <Textarea
-          id="diary-issues"
-          rows={2}
-          placeholder="Hold-ups, safety incidents, missing materials…"
-          value={issues}
-          onChange={(e) => setIssues(e.target.value)}
-        />
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button size="sm" variant="outline" onClick={onDone}>
-          {cancelLabel}
-        </Button>
-        <Button
-          size="sm"
-          variant="brand"
-          disabled={!title.trim() || !workCompleted.trim() || !entryDate || add.isPending}
-          onClick={() => add.mutate()}
-        >
-          {add.isPending ? "Sending…" : "Send diary"}
-        </Button>
-      </div>
-    </div>
+
+      <Dialog open={!!openEntry} onOpenChange={(o) => !o && setOpenId(null)}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="size-5 text-brand" /> Daily site diary
+            </DialogTitle>
+          </DialogHeader>
+          {openEntry && (
+            <DiaryEntryView
+              entry={openEntry}
+              taskTitle={taskFor(openEntry)}
+              onDeleted={() => setOpenId(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
-/** Daily diary for one task: add an entry (if allowed) and see past entries. */
+// ============================================================
+// Exported sections
+// ============================================================
+
+/** Daily diary for one task (inside the task popup): add an entry and see past ones. */
 export function TaskDiarySection({
   taskId,
   projectId,
@@ -320,13 +857,11 @@ export function TaskDiarySection({
   projectId: string;
   canWrite: boolean;
 }) {
-  const { user, hasRole } = useAuth();
   const [adding, setAdding] = useState(false);
   const { data: entries = [], isLoading } = useQuery({
     queryKey: ["diary", "task", taskId],
     queryFn: () => fetchDiaryEntries({ taskId }),
   });
-  const remove = useDeleteDiaryEntry();
 
   return (
     <div className="border-t border-border pt-3">
@@ -360,29 +895,20 @@ export function TaskDiarySection({
           />
         </div>
       )}
-      <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
+      <div className="mt-2">
         {isLoading ? (
           <div className="text-xs text-muted-foreground">Loading diary…</div>
         ) : entries.length === 0 ? (
           <div className="text-xs text-muted-foreground">No diary entries yet.</div>
         ) : (
-          entries.map((e) => (
-            <DiaryEntryCard
-              key={e.id}
-              entry={e}
-              deleting={remove.isPending}
-              onDelete={
-                e.authorId === user?.id || hasRole("admin") ? () => remove.mutate(e.id) : undefined
-              }
-            />
-          ))
+          <DiaryEntryList entries={entries} className="rounded-md border border-border" />
         )}
       </div>
     </div>
   );
 }
 
-/** Every diary entry across a project's tasks, newest day first. */
+/** Every diary entry across a project (project-level and task-linked), newest day first. */
 export function ProjectDiary({
   projectId,
   taskTitles,
@@ -390,11 +916,7 @@ export function ProjectDiary({
   projectId: string;
   taskTitles: Map<string, string>;
 }) {
-  const { user, hasRole, allUsers } = useAuth();
-  const [openId, setOpenId] = useState<string | null>(null);
   const { data: entries = [], isLoading, isError, error } = useProjectDiary(projectId);
-  const remove = useDeleteDiaryEntry();
-  const openEntry = entries.find((e) => e.id === openId) ?? null;
 
   if (isLoading)
     return <div className="as-card p-6 text-sm text-muted-foreground">Loading diary…</div>;
@@ -411,65 +933,7 @@ export function ProjectDiary({
       </div>
     );
 
-  return (
-    <>
-      <div className="as-card divide-y divide-border">
-        {entries.map((e) => {
-          const author = allUsers.find((u) => u.id === e.authorId);
-          const taskTitle = e.taskId ? (taskTitles.get(e.taskId) ?? "Archived task") : null;
-          return (
-            <button
-              key={e.id}
-              onClick={() => setOpenId(e.id)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent as-press"
-            >
-              <div className="grid size-9 shrink-0 place-items-center rounded-md bg-brand/10 text-brand">
-                <BookOpen className="size-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{diaryTitle(e)}</div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {formatEntryDate(e.entryDate)}
-                  {author ? ` · ${author.name.split(" ")[0]}` : ""}
-                  {taskTitle ? ` · ${taskTitle}` : ""}
-                </div>
-              </div>
-              {e.issues && (
-                <AlertTriangle className="size-4 shrink-0 text-warning" aria-label="Has issues" />
-              )}
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-            </button>
-          );
-        })}
-      </div>
-
-      <Dialog open={!!openEntry} onOpenChange={(o) => !o && setOpenId(null)}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="size-5 text-brand" /> Diary entry
-            </DialogTitle>
-          </DialogHeader>
-          {openEntry && (
-            <DiaryEntryCard
-              entry={openEntry}
-              taskTitle={
-                openEntry.taskId
-                  ? (taskTitles.get(openEntry.taskId) ?? "Archived task")
-                  : "Whole project"
-              }
-              deleting={remove.isPending}
-              onDelete={
-                openEntry.authorId === user?.id || hasRole("admin")
-                  ? () => remove.mutate(openEntry.id, { onSuccess: () => setOpenId(null) })
-                  : undefined
-              }
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
-  );
+  return <DiaryEntryList entries={entries} taskTitles={taskTitles} className="as-card" />;
 }
 
 /** Project diary entries, shared by the Diary tab, the header button and the reminder. */
@@ -514,14 +978,12 @@ export function DailyDiaryDialog({
   onOpenChange,
   projectId,
   projectName,
-  tasks,
   reminder = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
   projectName: string;
-  tasks: { id: string; title: string }[];
   reminder?: boolean;
 }) {
   const close = () => {
@@ -530,10 +992,10 @@ export function DailyDiaryDialog({
   };
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <BookOpen className="size-5 text-brand" /> Daily diary
+            <BookOpen className="size-5 text-brand" /> Daily site diary
           </DialogTitle>
           <DialogDescription>{projectName}</DialogDescription>
         </DialogHeader>
@@ -545,7 +1007,6 @@ export function DailyDiaryDialog({
         )}
         <AddDiaryEntryForm
           projectId={projectId}
-          tasks={tasks}
           onDone={close}
           cancelLabel={reminder ? "Remind me later" : "Cancel"}
         />

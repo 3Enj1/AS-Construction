@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TaskCard } from "@/components/tasks/TaskCard";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { RaiseRequestDialog } from "@/components/materials/RaiseRequestDialog";
 import { useAuth } from "@/lib/auth-context";
 import {
   clockIn,
@@ -16,8 +19,10 @@ import {
   CheckCircle2,
   Coffee,
   ClipboardList,
+  BookOpen,
   Camera,
   MessageSquare,
+  PackagePlus,
   PlayCircle,
   StopCircle,
   Sandwich,
@@ -33,6 +38,7 @@ export function WorkerDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [requestOpen, setRequestOpen] = useState(false);
 
   const { data: myTasks = [], isLoading } = useQuery({
     queryKey: ["tasks", "worker", user?.id],
@@ -215,6 +221,33 @@ export function WorkerDashboard() {
 
       {/* QUICK ACTIONS */}
       <div className="mt-4 grid grid-cols-3 gap-2">
+        <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="h-16 flex-col gap-1 as-press">
+              <PackagePlus className="size-5 text-brand" />
+              <span className="text-[11px]">Request materials</span>
+            </Button>
+          </DialogTrigger>
+          <RaiseRequestDialog
+            onCreated={() => {
+              setRequestOpen(false);
+              qc.invalidateQueries({ queryKey: ["material-requests"] });
+            }}
+          />
+        </Dialog>
+        {/* The diary lives on each project page (Daily diary button). */}
+        <Button variant="outline" asChild className="h-16 flex-col gap-1 as-press">
+          <Link to="/projects">
+            <BookOpen className="size-5 text-brand" />
+            <span className="text-[11px]">Daily diary</span>
+          </Link>
+        </Button>
+        <Button variant="outline" asChild className="h-16 flex-col gap-1 as-press">
+          <Link to="/chat">
+            <MessageSquare className="size-5 text-info" />
+            <span className="text-[11px]">Project chat</span>
+          </Link>
+        </Button>
         <Button variant="outline" asChild className="h-16 flex-col gap-1 as-press">
           <Link to="/uploads">
             <Camera className="size-5 text-brand" />
@@ -222,9 +255,9 @@ export function WorkerDashboard() {
           </Link>
         </Button>
         <Button variant="outline" asChild className="h-16 flex-col gap-1 as-press">
-          <Link to="/chat">
-            <MessageSquare className="size-5 text-info" />
-            <span className="text-[11px]">Project chat</span>
+          <Link to="/material-requests">
+            <PackagePlus className="size-5 text-warning" />
+            <span className="text-[11px]">My requests</span>
           </Link>
         </Button>
         <Button variant="outline" asChild className="h-16 flex-col gap-1 as-press">

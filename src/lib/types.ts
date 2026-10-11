@@ -104,10 +104,12 @@ export interface MaterialRequest {
   projectName?: string;
   requestedBy: string;
   requestedByName?: string;
-  materialId: string;
+  /** Set only when the request points at an inventory item; typed requests are null. */
+  materialId: string | null;
   material: string;
   unit: string;
   quantity: number;
+  notes?: string;
   status: "Pending" | "Approved" | "Denied" | "Delivered";
   createdAt: string;
   urgency: "Normal" | "Urgent";

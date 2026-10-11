@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -12,11 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { fetchMaterials, fetchProjectsMini, raiseMaterialRequest } from "@/lib/project-actions";
+import { fetchProjectsMini, raiseMaterialRequest } from "@/lib/project-actions";
 import { toast } from "sonner";
 
-/** Raise a material request. Pass `projectId` to lock it to one project (the
- * project page's Materials tab); omit it to show a project picker. */
+/** Raise a material request by typing what's needed (no inventory list).
+ * Pass `projectId` to lock it to one project (the project page's Materials
+ * tab); omit it to show a picker of the projects the user can see. */
 export function RaiseRequestDialog({
   projectId: fixedProjectId,
   onCreated,
@@ -25,8 +27,10 @@ export function RaiseRequestDialog({
   onCreated: () => void;
 }) {
   const [projectId, setProjectId] = useState<string>(fixedProjectId ?? "");
-  const [materialId, setMaterialId] = useState<string>("");
+  const [materialName, setMaterialName] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [unit, setUnit] = useState("");
+  const [notes, setNotes] = useState("");
   const [urgent, setUrgent] = useState(false);
 
   const { data: projects = [] } = useQuery({
@@ -34,29 +38,30 @@ export function RaiseRequestDialog({
     queryFn: fetchProjectsMini,
     enabled: !fixedProjectId,
   });
-  const { data: materials = [] } = useQuery({ queryKey: ["materials"], queryFn: fetchMaterials });
 
   const create = useMutation({
     mutationFn: async () =>
       raiseMaterialRequest({
         projectId,
-        materialId,
+        materialName: materialName.trim(),
         quantity: Number(quantity),
+        unit: unit.trim() || null,
+        notes: notes.trim() || null,
         isUrgent: urgent,
       }),
     onSuccess: () => {
-      toast.success("Request raised");
+      toast.success("Request sent");
       onCreated();
     },
-    onError: (e: Error) => toast.error(e.message || "Could not raise request"),
+    onError: (e: Error) => toast.error(e.message || "Could not send request"),
   });
 
-  const valid = projectId && materialId && Number(quantity) > 0;
+  const valid = !!projectId && !!materialName.trim() && Number(quantity) > 0;
 
   return (
-    <DialogContent className="sm:max-w-lg">
+    <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
       <DialogHeader>
-        <DialogTitle>Raise material request</DialogTitle>
+        <DialogTitle>Request materials</DialogTitle>
       </DialogHeader>
       <div className="grid gap-3">
         {!fixedProjectId && (
@@ -77,28 +82,45 @@ export function RaiseRequestDialog({
           </div>
         )}
         <div className="grid gap-1.5">
-          <Label>Material</Label>
-          <Select value={materialId} onValueChange={setMaterialId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select material" />
-            </SelectTrigger>
-            <SelectContent>
-              {materials.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.name} ({m.stock} {m.unit} in stock)
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label htmlFor="rr-name">Material</Label>
+          <Input
+            id="rr-name"
+            placeholder="e.g. Cement, 6mm rebar, roof sheeting"
+            value={materialName}
+            onChange={(e) => setMaterialName(e.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="rr-qty">Quantity</Label>
+            <Input
+              id="rr-qty"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="any"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="rr-unit">Unit (optional)</Label>
+            <Input
+              id="rr-unit"
+              placeholder="bags, m, sheets…"
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+            />
+          </div>
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="rr-qty">Quantity</Label>
-          <Input
-            id="rr-qty"
-            type="number"
-            min={1}
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
+          <Label htmlFor="rr-notes">Note (optional)</Label>
+          <Textarea
+            id="rr-notes"
+            rows={2}
+            placeholder="Where it's needed, by when, size or brand…"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
           />
         </div>
         <label className="flex items-center gap-2 text-sm">
@@ -112,7 +134,7 @@ export function RaiseRequestDialog({
           disabled={!valid || create.isPending}
           onClick={() => create.mutate()}
         >
-          {create.isPending ? "Raising…" : "Raise request"}
+          {create.isPending ? "Sending…" : "Send request"}
         </Button>
       </DialogFooter>
     </DialogContent>

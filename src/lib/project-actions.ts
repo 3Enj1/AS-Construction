@@ -447,7 +447,10 @@ export async function addMaterial(input: {
 type DbMaterialRequest = {
   id: string;
   project_id: string;
-  material_id: string;
+  material_id: string | null;
+  material_name: string | null;
+  unit: string | null;
+  notes: string | null;
   requested_by: string;
   quantity: number;
   is_urgent: boolean;
@@ -468,7 +471,7 @@ export async function fetchMaterialRequests(projectId?: string): Promise<Materia
   let q = supabase
     .from("material_requests")
     .select(
-      "id,project_id,material_id,requested_by,quantity,is_urgent,status,reviewed_by,reviewed_at,created_at",
+      "id,project_id,material_id,material_name,unit,notes,requested_by,quantity,is_urgent,status,reviewed_by,reviewed_at,created_at",
     )
     .order("created_at", { ascending: false });
   if (projectId) q = q.eq("project_id", projectId);
@@ -478,12 +481,16 @@ export async function fetchMaterialRequests(projectId?: string): Promise<Materia
   if (reqs.length === 0) return [];
 
   const projectIds = Array.from(new Set(reqs.map((r) => r.project_id)));
-  const materialIds = Array.from(new Set(reqs.map((r) => r.material_id)));
+  const materialIds = Array.from(
+    new Set(reqs.map((r) => r.material_id).filter((id): id is string => !!id)),
+  );
   const profileIds = Array.from(new Set(reqs.map((r) => r.requested_by)));
 
   const [projectsRes, materialsRes, profilesRes] = await Promise.all([
     supabase.from("projects").select("id,project_name").in("id", projectIds),
-    supabase.from("materials").select("id,name,unit").in("id", materialIds),
+    materialIds.length
+      ? supabase.from("materials").select("id,name,unit").in("id", materialIds)
+      : Promise.resolve({ data: [] as { id: string; name: string; unit: string }[], error: null }),
     supabase.from("profiles").select("id,full_name").in("id", profileIds),
   ]);
 
@@ -503,9 +510,14 @@ export async function fetchMaterialRequests(projectId?: string): Promise<Materia
     requestedBy: r.requested_by,
     requestedByName: profileMap.get(r.requested_by)?.full_name,
     materialId: r.material_id,
-    material: materialMap.get(r.material_id)?.name ?? "Unknown material",
-    unit: materialMap.get(r.material_id)?.unit ?? "",
+    // Typed requests carry their own name/unit; older ones point at inventory.
+    material:
+      r.material_name ??
+      (r.material_id ? materialMap.get(r.material_id)?.name : undefined) ??
+      "Unknown material",
+    unit: r.unit ?? (r.material_id ? materialMap.get(r.material_id)?.unit : undefined) ?? "",
     quantity: Number(r.quantity),
+    notes: r.notes ?? undefined,
     status: REQUEST_STATUS_LABEL[r.status],
     createdAt: r.created_at,
     urgency: r.is_urgent ? "Urgent" : "Normal",
@@ -514,39 +526,41 @@ export async function fetchMaterialRequests(projectId?: string): Promise<Materia
   }));
 }
 
+/** Raise a typed material request (name/qty/unit typed by the requester).
+ * Admins + PMs are notified by the notify_material_request() DB trigger, so
+ * it works for workers too (RLS doesn't let them insert notifications). */
 export async function raiseMaterialRequest(input: {
   projectId: string;
-  materialId: string;
+  materialName: string;
   quantity: number;
+  unit?: string | null;
+  notes?: string | null;
   isUrgent: boolean;
 }) {
   const meId = await currentProfileId();
   if (!meId) throw new Error("Not signed in");
   const { error } = await supabase.from("material_requests").insert({
     project_id: input.projectId,
-    material_id: input.materialId,
+    material_name: input.materialName,
+    unit: input.unit || null,
+    notes: input.notes || null,
     requested_by: meId,
     quantity: input.quantity,
     is_urgent: input.isUrgent,
   });
   if (error) throw error;
-  await notify({
-    forRole: "project_manager",
-    title: "New material request",
-    body: `A material request for ${input.quantity} unit(s) is awaiting review.`,
-    kind: input.isUrgent ? "warning" : "info",
-    linkUrl: "/material-requests",
-  });
 }
 
-/** Approve or deny a material request. Approving atomically decrements stock; fails loudly if stock is insufficient. */
+/** Approve or deny a material request. For inventory-linked requests, approving
+ * atomically decrements stock (fails loudly if insufficient); typed requests
+ * just change status. */
 export async function reviewMaterialRequest(
   request: MaterialRequest,
   decision: "approved" | "denied",
 ) {
   const meId = await currentProfileId();
 
-  if (decision === "approved") {
+  if (decision === "approved" && request.materialId) {
     await insertMaterialTransaction({
       materialId: request.materialId,
       projectId: request.projectId,
@@ -565,7 +579,7 @@ export async function reviewMaterialRequest(
   await notify({
     forUserId: request.requestedBy,
     title: decision === "approved" ? "Material request approved" : "Material request denied",
-    body: `Your request for ${request.quantity} ${request.unit} of ${request.material} was ${decision}.`,
+    body: `Your request for ${request.quantity}${request.unit ? ` ${request.unit}` : ""} of ${request.material} was ${decision}.`,
     kind: decision === "approved" ? "success" : "danger",
     linkUrl: "/material-requests",
   });
@@ -1597,6 +1611,13 @@ export async function rejectTask(task: EnrichedTask, reason: string): Promise<vo
   }
 }
 
+export type DiaryMaterial = { name: string; qty: string; unit: string };
+/** "AS Construction personnel on site" row. */
+export type DiaryPerson = { name: string; role: string; hours: string };
+/** "Subcontractors on site" row. */
+export type DiarySubcontractor = { trade: string; people: string; hours: string; work: string };
+
+/** A daily site diary entry, laid out like the AS Construction template. */
 export type DiaryEntry = {
   id: string;
   /** null = a project-level entry not tied to one task. */
@@ -1605,31 +1626,88 @@ export type DiaryEntry = {
   authorId: string;
   entryDate: string;
   title: string | null;
-  workCompleted: string;
+  /** Typed task/area worked on (project-level entries). */
+  taskLabel: string | null;
+  workingHours: string | null;
   weather: string | null;
+  personnel: DiaryPerson[];
+  subcontractors: DiarySubcontractor[];
+  workCompleted: string;
+  materialsDelivered: string | null;
+  /** What was used and how many, typed by hand. */
+  materialsUsed: DiaryMaterial[];
+  plantEquipment: string | null;
+  inspections: string | null;
+  instructions: string | null;
+  /** Shown as "Delays and impact". */
+  issues: string | null;
+  healthSafety: string | null;
+  visitors: string | null;
+  photographs: string | null;
+  nextDay: string | null;
+  /** Older entries only (before the personnel table existed). */
   workersOnSite: number | null;
   hoursWorked: number | null;
-  issues: string | null;
+  /** Drawn signatures as PNG data URLs. */
+  recorderSignature: string | null;
+  checkedBy: string | null;
+  checkedAt: string | null;
+  checkerSignature: string | null;
   createdAt: string;
 };
 
-const DIARY_COLUMNS =
-  "id,task_id,project_id,author_id,entry_date,title,work_completed,weather,workers_on_site,hours_worked,issues,created_at";
+/** Turn a jsonb array of objects into typed rows with string fields,
+ * dropping rows where every field is blank. */
+function toRows<K extends string>(v: unknown, keys: readonly K[]): Record<K, string>[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((r) => {
+      const out = {} as Record<K, string>;
+      for (const k of keys) out[k] = String((r as Record<string, unknown>)?.[k] ?? "").trim();
+      return out;
+    })
+    .filter((r) => keys.some((k) => r[k]));
+}
+const MATERIAL_KEYS = ["name", "qty", "unit"] as const;
+const PERSON_KEYS = ["name", "role", "hours"] as const;
+const SUB_KEYS = ["trade", "people", "hours", "work"] as const;
 
-function mapDiaryEntry(e: {
+const DIARY_COLUMNS =
+  "id,task_id,project_id,author_id,entry_date,title,task_label,working_hours,weather,personnel,subcontractors,work_completed,materials_delivered,materials_used,plant_equipment,inspections,instructions,issues,health_safety,visitors,photographs,next_day,workers_on_site,hours_worked,recorder_signature,checked_by,checked_at,checker_signature,created_at";
+
+type DbDiaryEntry = {
   id: string;
   task_id: string | null;
   project_id: string;
   author_id: string;
   entry_date: string;
   title: string | null;
-  work_completed: string;
+  task_label: string | null;
+  working_hours: string | null;
   weather: string | null;
+  personnel: unknown;
+  subcontractors: unknown;
+  work_completed: string;
+  materials_delivered: string | null;
+  materials_used: unknown;
+  plant_equipment: string | null;
+  inspections: string | null;
+  instructions: string | null;
+  issues: string | null;
+  health_safety: string | null;
+  visitors: string | null;
+  photographs: string | null;
+  next_day: string | null;
   workers_on_site: number | null;
   hours_worked: number | null;
-  issues: string | null;
+  recorder_signature: string | null;
+  checked_by: string | null;
+  checked_at: string | null;
+  checker_signature: string | null;
   created_at: string;
-}): DiaryEntry {
+};
+
+function mapDiaryEntry(e: DbDiaryEntry): DiaryEntry {
   return {
     id: e.id,
     taskId: e.task_id,
@@ -1637,11 +1715,28 @@ function mapDiaryEntry(e: {
     authorId: e.author_id,
     entryDate: e.entry_date,
     title: e.title,
-    workCompleted: e.work_completed,
+    taskLabel: e.task_label,
+    workingHours: e.working_hours,
     weather: e.weather,
+    personnel: toRows(e.personnel, PERSON_KEYS),
+    subcontractors: toRows(e.subcontractors, SUB_KEYS),
+    workCompleted: e.work_completed,
+    materialsDelivered: e.materials_delivered,
+    materialsUsed: toRows(e.materials_used, MATERIAL_KEYS).filter((m) => m.name),
+    plantEquipment: e.plant_equipment,
+    inspections: e.inspections,
+    instructions: e.instructions,
+    issues: e.issues,
+    healthSafety: e.health_safety,
+    visitors: e.visitors,
+    photographs: e.photographs,
+    nextDay: e.next_day,
     workersOnSite: e.workers_on_site,
     hoursWorked: e.hours_worked != null ? Number(e.hours_worked) : null,
-    issues: e.issues,
+    recorderSignature: e.recorder_signature,
+    checkedBy: e.checked_by,
+    checkedAt: e.checked_at,
+    checkerSignature: e.checker_signature,
     createdAt: e.created_at,
   };
 }
@@ -1658,20 +1753,36 @@ export async function fetchDiaryEntries(
   q = "taskId" in filter ? q.eq("task_id", filter.taskId) : q.eq("project_id", filter.projectId);
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []).map(mapDiaryEntry);
+  return ((data ?? []) as DbDiaryEntry[]).map(mapDiaryEntry);
 }
 
-export async function addDiaryEntry(input: {
+export type NewDiaryEntry = {
   taskId?: string | null;
   projectId: string;
   entryDate: string;
-  title?: string | null;
-  workCompleted: string;
+  title: string;
+  taskLabel?: string | null;
+  workingHours?: string | null;
   weather?: string | null;
-  workersOnSite?: number | null;
-  hoursWorked?: number | null;
+  personnel: DiaryPerson[];
+  subcontractors: DiarySubcontractor[];
+  workCompleted: string;
+  materialsDelivered?: string | null;
+  materialsUsed: DiaryMaterial[];
+  plantEquipment?: string | null;
+  inspections?: string | null;
+  instructions?: string | null;
   issues?: string | null;
-}): Promise<void> {
+  healthSafety?: string | null;
+  visitors?: string | null;
+  photographs?: string | null;
+  nextDay?: string | null;
+  recorderSignature: string;
+};
+
+const blankToNull = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
+
+export async function addDiaryEntry(input: NewDiaryEntry): Promise<void> {
   const meId = await currentProfileId();
   if (!meId) throw new Error("Not signed in");
   const { error } = await supabase.from("task_diary_entries").insert({
@@ -1679,12 +1790,34 @@ export async function addDiaryEntry(input: {
     project_id: input.projectId,
     author_id: meId,
     entry_date: input.entryDate,
-    title: input.title || null,
-    work_completed: input.workCompleted,
-    weather: input.weather || null,
-    workers_on_site: input.workersOnSite ?? null,
-    hours_worked: input.hoursWorked ?? null,
-    issues: input.issues || null,
+    title: blankToNull(input.title),
+    task_label: blankToNull(input.taskLabel),
+    working_hours: blankToNull(input.workingHours),
+    weather: blankToNull(input.weather),
+    personnel: toRows(input.personnel, PERSON_KEYS),
+    subcontractors: toRows(input.subcontractors, SUB_KEYS),
+    work_completed: input.workCompleted.trim(),
+    materials_delivered: blankToNull(input.materialsDelivered),
+    materials_used: toRows(input.materialsUsed, MATERIAL_KEYS).filter((m) => m.name),
+    plant_equipment: blankToNull(input.plantEquipment),
+    inspections: blankToNull(input.inspections),
+    instructions: blankToNull(input.instructions),
+    issues: blankToNull(input.issues),
+    health_safety: blankToNull(input.healthSafety),
+    visitors: blankToNull(input.visitors),
+    photographs: blankToNull(input.photographs),
+    next_day: blankToNull(input.nextDay),
+    recorder_signature: input.recorderSignature,
+  });
+  if (error) throw error;
+}
+
+/** "Checked by": stamps the signed-in manager/supervisor, the time and their
+ * drawn signature (server-side, via sign_off_diary_entry()). */
+export async function signOffDiaryEntry(entryId: string, signature: string): Promise<void> {
+  const { error } = await supabase.rpc("sign_off_diary_entry", {
+    _entry_id: entryId,
+    _signature: signature,
   });
   if (error) throw error;
 }

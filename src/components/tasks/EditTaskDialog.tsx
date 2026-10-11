@@ -249,9 +249,10 @@ export function EditTaskDialog({
     },
     onError: (e: Error) => toast.error(e.message),
   });
+  // Inventory-linked usage is a manager tool; workers record what they used
+  // (typed) in the daily diary instead.
   const canLogUsage =
-    (canManage || isOwner) &&
-    ["assigned", "in_progress", "awaiting_materials"].includes(task.dbStatus);
+    canManage && ["assigned", "in_progress", "awaiting_materials"].includes(task.dbStatus);
 
   const { data: updates = [] } = useQuery({
     queryKey: ["task-updates", task.id],

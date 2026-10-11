@@ -66,6 +66,7 @@ const WORKER_NAV: NavItem[] = [
   { label: "My Tasks", to: "/tasks", icon: ClipboardList, short: "Tasks" },
   { label: "My Projects", to: "/projects", icon: Hammer, short: "Projects" },
   { label: "Clock In", to: "/clock", icon: Clock },
+  { label: "Material Requests", to: "/material-requests", icon: PackagePlus, short: "Requests" },
   { label: "Uploads", to: "/uploads", icon: ImageIcon },
   { label: "Chat", to: "/chat", icon: MessageSquare },
   { label: "Notifications", to: "/notifications", icon: Bell },

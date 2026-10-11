@@ -470,7 +470,6 @@ function ProjectDetail() {
           onOpenChange={setDiaryOpen}
           projectId={project.id}
           projectName={project.project_name}
-          tasks={tasks.map((t) => ({ id: t.id, title: t.title }))}
           reminder={diaryIsReminder}
         />
       )}
@@ -860,6 +859,9 @@ function ProjectMaterialRequests({ projectId }: { projectId: string }) {
                 <div className="text-xs text-muted-foreground">
                   Raised {relativeFromNow(r.createdAt)} by {r.requestedByName ?? "someone"}
                 </div>
+                {r.notes && (
+                  <div className="mt-0.5 text-xs italic text-muted-foreground">"{r.notes}"</div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {r.urgency === "Urgent" && <Pill tone="danger">Urgent</Pill>}

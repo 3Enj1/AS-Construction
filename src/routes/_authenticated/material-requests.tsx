@@ -84,6 +84,9 @@ function MaterialRequests() {
                   <div className="text-xs text-muted-foreground">
                     {r.projectName} · raised {relativeFromNow(r.createdAt)} by {r.requestedByName}
                   </div>
+                  {r.notes && (
+                    <div className="mt-0.5 text-xs italic text-muted-foreground">"{r.notes}"</div>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
