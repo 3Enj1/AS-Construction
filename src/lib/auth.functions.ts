@@ -107,3 +107,73 @@ export const createEmployee = createServerFn({ method: "POST" })
 
     return { id: created.user?.id ?? null };
   });
+
+const setEmployeeRemovedSchema = z.object({
+  profileId: z.string().uuid(),
+  removed: z.boolean(),
+});
+
+/** Admin-only: remove (or restore) a user. Removing deactivates their profile
+ * (so the employee-code login refuses them and they drop out of pickers) and
+ * bans their Supabase Auth user (so existing sessions can't refresh). Nothing
+ * is deleted — their tasks, diary entries, chat and clock-ins stay intact. */
+export const setEmployeeRemoved = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(setEmployeeRemovedSchema)
+  .handler(async ({ data, context }) => {
+    const { data: callerRole } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (!callerRole) {
+      throw new Error("Only admins can remove users.");
+    }
+
+    const { data: target, error: targetError } = await supabaseAdmin
+      .from("profiles")
+      .select("id,auth_user_id")
+      .eq("id", data.profileId)
+      .maybeSingle();
+    if (targetError) throw new Error(targetError.message);
+    if (!target) throw new Error("User not found.");
+    if (target.auth_user_id === context.userId) {
+      throw new Error("You can't remove your own login.");
+    }
+
+    const { data: me } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("auth_user_id", context.userId)
+      .maybeSingle();
+
+    const { error: banError } = await supabaseAdmin.auth.admin.updateUserById(target.auth_user_id, {
+      ban_duration: data.removed ? "876000h" : "none",
+    });
+    if (banError) throw new Error(banError.message);
+
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update(
+        data.removed
+          ? {
+              is_active: false,
+              is_archived: true,
+              archived_at: new Date().toISOString(),
+              archived_by: me?.id ?? null,
+              archive_reason: "Removed by admin",
+            }
+          : {
+              is_active: true,
+              is_archived: false,
+              archived_at: null,
+              archived_by: null,
+              archive_reason: null,
+            },
+      )
+      .eq("id", target.id);
+    if (error) throw new Error(error.message);
+
+    return { ok: true };
+  });

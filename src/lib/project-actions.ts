@@ -47,8 +47,8 @@ export async function fetchEnrichedTasks(opts?: {
 
   const [projectsRes, phasesRes, profilesRes] = await Promise.all([
     projectIds.length
-      ? supabase.from("projects").select("id,project_name").in("id", projectIds)
-      : Promise.resolve({ data: [] as ProjectMini[], error: null }),
+      ? supabase.from("projects").select("id,project_name,is_archived").in("id", projectIds)
+      : Promise.resolve({ data: [] as (ProjectMini & { is_archived: boolean })[], error: null }),
     phaseIds.length
       ? supabase.from("project_phases").select("id,phase_name,project_id").in("id", phaseIds)
       : Promise.resolve({ data: [] as PhaseMini[], error: null }),
@@ -57,20 +57,24 @@ export async function fetchEnrichedTasks(opts?: {
       : Promise.resolve({ data: [] as ProfileMini[], error: null }),
   ]);
 
-  const projectMap = new Map(((projectsRes.data as ProjectMini[]) ?? []).map((p) => [p.id, p]));
+  const projectRows = (projectsRes.data as (ProjectMini & { is_archived: boolean })[]) ?? [];
+  const removedProjectIds = new Set(projectRows.filter((p) => p.is_archived).map((p) => p.id));
+  const projectMap = new Map(projectRows.map((p) => [p.id, p]));
   const phaseMap = new Map(((phasesRes.data as PhaseMini[]) ?? []).map((p) => [p.id, p]));
   const profileMap = new Map(((profilesRes.data as ProfileMini[]) ?? []).map((p) => [p.id, p]));
 
-  return rows.map((t) =>
-    enrichTask(t, {
-      project: projectMap.get(t.project_id) ?? null,
-      phase: t.phase_id ? (phaseMap.get(t.phase_id) ?? null) : null,
-      assignedUser: t.assigned_user_id ? (profileMap.get(t.assigned_user_id) ?? null) : null,
-      supervisor: t.assigned_supervisor_id
-        ? (profileMap.get(t.assigned_supervisor_id) ?? null)
-        : null,
-    }),
-  );
+  return rows
+    .filter((t) => !removedProjectIds.has(t.project_id))
+    .map((t) =>
+      enrichTask(t, {
+        project: projectMap.get(t.project_id) ?? null,
+        phase: t.phase_id ? (phaseMap.get(t.phase_id) ?? null) : null,
+        assignedUser: t.assigned_user_id ? (profileMap.get(t.assigned_user_id) ?? null) : null,
+        supervisor: t.assigned_supervisor_id
+          ? (profileMap.get(t.assigned_supervisor_id) ?? null)
+          : null,
+      }),
+    );
 }
 
 /** Create a project, optionally generating phases + tasks from a template. */
@@ -1860,4 +1864,37 @@ export async function restoreTask(taskId: string): Promise<void> {
     .update({ is_archived: false, archived_at: null, archived_by: null })
     .eq("id", taskId);
   if (error) throw error;
+}
+
+/** "Remove" a project: archive it so it disappears from the app, while all its
+ * tasks, diary entries, chat, photos and expenses are kept for restoring. */
+export async function archiveProject(projectId: string): Promise<void> {
+  const meId = await currentProfileId();
+  const { error } = await supabase
+    .from("projects")
+    .update({ is_archived: true, archived_at: new Date().toISOString(), archived_by: meId })
+    .eq("id", projectId);
+  if (error) throw error;
+}
+
+/** Undo archiveProject. */
+export async function restoreProject(projectId: string): Promise<void> {
+  const { error } = await supabase
+    .from("projects")
+    .update({ is_archived: false, archived_at: null, archived_by: null })
+    .eq("id", projectId);
+  if (error) throw error;
+}
+
+export type ArchivedProject = { id: string; name: string; archivedAt: string | null };
+
+/** Removed (archived) projects, most recently removed first. */
+export async function fetchArchivedProjects(): Promise<ArchivedProject[]> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id,project_name,archived_at")
+    .eq("is_archived", true)
+    .order("archived_at", { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  return (data ?? []).map((p) => ({ id: p.id, name: p.project_name, archivedAt: p.archived_at }));
 }

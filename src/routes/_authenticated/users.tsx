@@ -25,19 +25,29 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
 import { fetchAllProfilesFull, fetchOnSiteProfileIds } from "@/lib/project-actions";
-import { createEmployee } from "@/lib/auth.functions";
-import { ROLE_LABEL, type Role } from "@/lib/types";
+import { createEmployee, setEmployeeRemoved } from "@/lib/auth.functions";
+import { ROLE_LABEL, type Role, type User } from "@/lib/types";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, RotateCcw, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/users")({
   component: UsersPage,
 });
 
 function UsersPage() {
-  const { refreshAllUsers, hasRole } = useAuth();
+  const { user: me, refreshAllUsers, hasRole } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [removing, setRemoving] = useState<User | null>(null);
   const { data: onSite = new Set<string>() } = useQuery({
     queryKey: ["on-site-profile-ids"],
     queryFn: fetchOnSiteProfileIds,
@@ -48,6 +58,20 @@ function UsersPage() {
     queryKey: ["profiles-full"],
     queryFn: fetchAllProfilesFull,
     enabled: hasRole("admin"),
+  });
+  const activeUsers = allUsers.filter((u) => u.isActive !== false);
+  const removedUsers = allUsers.filter((u) => u.isActive === false);
+
+  const setRemoved = useMutation({
+    mutationFn: (input: { profileId: string; removed: boolean }) =>
+      setEmployeeRemoved({ data: input }),
+    onSuccess: (_r, input) => {
+      toast.success(input.removed ? "User removed — they can no longer sign in" : "User restored");
+      setRemoving(null);
+      refreshAllUsers();
+      qc.invalidateQueries({ queryKey: ["profiles-full"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not update user"),
   });
 
   if (!hasRole("admin")) {
@@ -82,7 +106,7 @@ function UsersPage() {
         }
       />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {allUsers.map((u) => {
+        {activeUsers.map((u) => {
           const isOnSite = onSite.has(u.id);
           return (
             <div key={u.id} className="as-card p-4">
@@ -101,6 +125,17 @@ function UsersPage() {
                   <div className="truncate font-medium">{u.name}</div>
                   <div className="truncate text-xs text-muted-foreground">{u.jobTitle}</div>
                 </div>
+                {u.id !== me?.id && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-8 shrink-0 text-muted-foreground hover:text-danger"
+                    aria-label={`Remove ${u.name}`}
+                    onClick={() => setRemoving(u)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                )}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <code className="text-[11px] font-mono text-brand">{u.employeeCode}</code>
@@ -117,6 +152,60 @@ function UsersPage() {
           );
         })}
       </div>
+
+      {removedUsers.length > 0 && (
+        <div className="mt-8">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Removed users
+          </h2>
+          <div className="as-card divide-y divide-border">
+            {removedUsers.map((u) => (
+              <div key={u.id} className="flex items-center gap-3 p-3">
+                <UserAvatar user={u} size={32} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{u.name}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {u.employeeCode} · {ROLE_LABEL[u.role]} · can't sign in
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={setRemoved.isPending}
+                  onClick={() => setRemoved.mutate({ profileId: u.id, removed: false })}
+                >
+                  <RotateCcw className="size-3.5" /> Restore
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {removing?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              They'll be signed out and won't be able to sign in with {removing?.employeeCode} any
+              more. Their tasks, diary entries, chat and clock-ins are kept, and you can restore
+              them from "Removed users".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={setRemoved.isPending}>Cancel</AlertDialogCancel>
+            <Button
+              className="bg-danger text-danger-foreground hover:bg-danger/90"
+              disabled={!removing || setRemoved.isPending}
+              onClick={() =>
+                removing && setRemoved.mutate({ profileId: removing.id, removed: true })
+              }
+            >
+              {setRemoved.isPending ? "Removing…" : "Remove user"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

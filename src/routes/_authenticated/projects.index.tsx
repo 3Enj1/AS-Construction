@@ -2,6 +2,10 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ProjectCard } from "@/components/projects/ProjectCard";
+import {
+  RemoveProjectDialog,
+  RemovedProjectsDialog,
+} from "@/components/projects/RemoveProjectDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,7 +36,7 @@ import {
 import { templateVisual } from "@/lib/template-visuals";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { FileX2, Plus, Search } from "lucide-react";
+import { FileX2, Plus, RotateCcw, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type ProjectsSearch = { template?: string };
@@ -53,6 +57,9 @@ function ProjectsList() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const canRemove = hasRole("admin", "project_manager");
+  const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
+  const [removedListOpen, setRemovedListOpen] = useState(false);
 
   useEffect(() => {
     if (templateFromSearch) setOpen(true);
@@ -129,9 +136,31 @@ function ProjectsList() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((p) => (
-            <ProjectCard key={p.id} project={p} />
+            <ProjectCard
+              key={p.id}
+              project={p}
+              onRemove={canRemove ? () => setRemoving({ id: p.id, name: p.name }) : undefined}
+            />
           ))}
         </div>
+      )}
+      {canRemove && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="mt-3 text-xs text-muted-foreground"
+          onClick={() => setRemovedListOpen(true)}
+        >
+          <RotateCcw className="size-3.5" /> Removed projects
+        </Button>
+      )}
+      <RemoveProjectDialog
+        project={removing}
+        open={!!removing}
+        onOpenChange={(o) => !o && setRemoving(null)}
+      />
+      {canRemove && (
+        <RemovedProjectsDialog open={removedListOpen} onOpenChange={setRemovedListOpen} />
       )}
     </>
   );
