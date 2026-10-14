@@ -16,7 +16,7 @@
   // the Cloudflare dashboard (Settings > Variables & Secrets) as a
   // Secret, or `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
   "vars": {
-    "SUPABASE_URL": "https://iwrwhhglagzsvvgpsuop.supabase.co",
-    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_DkSg8KZzMMYPtbRaRPet3g_7lpokE_m",
+    "SUPABASE_URL": "https://tthskkqvkweutlhbnisz.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_uu1U4M26w-Lus2RdGC-How_EPlbOato",
   },
 }
